@@ -18,7 +18,6 @@ class VehicleData
         EngineHealth = engine_health;
         FuelAmmount = fuel_ammount;
         //CargoItems = cargo;
-		
     }
 };
 //FOR ITEMS IN VEHICLE CARGO.

@@ -205,6 +205,20 @@ FrameWidgetClass GarageMainFrame {
      "size to text v" 1
      "text valign" center
     }
+    ButtonWidgetClass Btn_GetKey {
+     color 0.5608 0.0706 0.0706 1
+     position -0.38289 0.35801
+     size 0.14134 0.07584
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     style DayZDefaultButtonAll
+     text "Key"
+     font "Depositary_System/gui/fonts/Edirne34"
+    }
    }
   }
   PanelWidgetClass MessageWidget {

@@ -11,23 +11,25 @@ class GarageLogger extends PluginBase
 
     void GarageLogger()
     {
-        m_Settings = Depositary_Config.Load();
-        if(!m_Settings.IsLoggingActiv)
-            return;
-        
-        CheckLogPath();
-
-        if(m_currentLogFileName == "")
+        if(GetGame().IsServer() && GetGame().IsMultiplayer())
         {
-            m_currentLogFileName = "GarageSystem_" + GetTimeForLog() + ".log";
-            if(FileExist(m_LogPath + m_currentLogFileName))
+            m_Settings = Depositary_Config.Load();
+            if(!m_Settings.IsLoggingActiv)
+                return;
+            
+            CheckLogPath();
+
+            if(m_currentLogFileName == "")
             {
-                DeleteFile(m_LogPath + m_currentLogFileName);
+                m_currentLogFileName = "GarageSystem_" + GetTimeForLog() + ".log";
+                if(FileExist(m_LogPath + m_currentLogFileName))
+                {
+                    DeleteFile(m_LogPath + m_currentLogFileName);
+                }
+                //Create File......
+                CreateLogFile();
             }
-            //Create File......
-            CreateLogFile();
         }
-        
     }
     void CreateLogFile()
     {

@@ -10,7 +10,7 @@ modded class PluginManager
 		//----------------------------------------------------------------------
 		//				Module Class Name 						Client	Server
 		//----------------------------------------------------------------------
-		if (GetGame().IsServer())
+		if (GetGame().IsServer() && GetGame().IsMultiplayer())
 		{
 			RegisterPlugin( "GarageLogger",						false, 	true );
 		}

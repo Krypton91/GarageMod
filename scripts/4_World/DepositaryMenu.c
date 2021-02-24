@@ -5,6 +5,8 @@ class DepositaryMenu extends UIScriptedMenu
     private ButtonWidget                            m_BtnParkOut;
 	private ButtonWidget							m_BtnYes;
 	private ButtonWidget							m_BtnNo;
+	private ButtonWidget							m_BtnKey;
+	private	ButtonWidget							m_BtnRepair;
     private TextWidget                              m_MessageHeadline;
 	private TextWidget                              m_OnYouMoney;
 	private TextWidget                              m_CostToParkOut;
@@ -60,6 +62,7 @@ class DepositaryMenu extends UIScriptedMenu
         m_BtnParkOut            = ButtonWidget.Cast( layoutRoot.FindAnyWidget( "Btn_ParkOut" ) );
 		m_BtnYes				= ButtonWidget.Cast(layoutRoot.FindAnyWidget("Btn_Yes") );
 		m_BtnNo					= ButtonWidget.Cast(layoutRoot.FindAnyWidget("Btn_No") );
+		m_BtnKey				= ButtonWidget.Cast(layoutRoot.FindAnyWidget("Btn_GetKey") );
         m_CarList               = TextListboxWidget.Cast(layoutRoot.FindAnyWidget("GarageList") );
         m_MessageWidget         = Widget.Cast(layoutRoot.FindAnyWidget("MessageWidget") );
 		m_YesNoWidget     		= Widget.Cast(layoutRoot.FindAnyWidget("PanelYesNo") );
@@ -87,6 +90,7 @@ class DepositaryMenu extends UIScriptedMenu
             m_MaxVehicleStore = params.param2;
 		}
 	}
+
     void RequestResponse(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
 	{
 		//Print("Response recived!");
@@ -108,6 +112,7 @@ class DepositaryMenu extends UIScriptedMenu
 			}
 		}
     }
+
     void UI_QuitRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
 	{
         if(type == CallType.Client)
@@ -116,14 +121,17 @@ class DepositaryMenu extends UIScriptedMenu
            		GetGame().GetUIManager().HideScriptedMenu(this);
 		}
     }
+
     protected void RequestParkedVehicles()
 	{
 		GetRPCManager().SendRPC("Depositary_System", "GarageDataRequest", null, true);
 	}
+
     void SetHeadlineColor(int color)
     {
         m_MessageHeadline.SetColor(color);
     }
+
     void UI_MessageRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
     {
         Param3<string, string, int> params;
@@ -133,11 +141,13 @@ class DepositaryMenu extends UIScriptedMenu
 			GarageSystemMessage(params.param1, params.param2, params.param3);
         }
     }
+
     void handleParkOutRequest(int IndexID, bool PayWithBank = false)
     {
         GetRPCManager().SendRPC("Depositary_System", "VehicleParkOutRequest", new Param3<int, int, bool>(m_GarageID, IndexID, PayWithBank), true);
 		m_WillPayWithBank = false;
     }
+
     private void ReloadGarage()
     {
         m_CarList.ClearItems();
@@ -148,6 +158,7 @@ class DepositaryMenu extends UIScriptedMenu
             m_CarList.SetItem( i, "" + m_CarListBoxIndexID.Get(i), 				NULL, 1 );
         }
     }
+
     protected void handleParkInRequest(bool PayWithBank = false)
     {
         GetRPCManager().SendRPC("Depositary_System", "VehicleParkinRequest", new Param2<int, bool>(m_GarageID, PayWithBank), true);
@@ -164,7 +175,6 @@ class DepositaryMenu extends UIScriptedMenu
 		GetGame().GetInput().ChangeGameFocus(1);
 		
 		layoutRoot.Show(true);
-		
 		
 		SetFocus( layoutRoot );
 
@@ -194,6 +204,7 @@ class DepositaryMenu extends UIScriptedMenu
 
 		Close();
     }
+
     override void Update(float timeslice)
 	{
        super.Update(timeslice);
@@ -223,6 +234,7 @@ class DepositaryMenu extends UIScriptedMenu
         if(!m_MenuActiv)
                 GetGame().GetUIManager().HideScriptedMenu(this);
     }
+
     bool OnMouseButtonDown(Widget w, int x, int y, int button)
 	{
 		super.OnMouseButtonDown(w, x, y, button);
@@ -235,6 +247,7 @@ class DepositaryMenu extends UIScriptedMenu
 		}
 		return false;
 	}
+
     void UpdateRotation(int mouse_x, int mouse_y, bool is_dragging)
 	{
 		vector o = m_PreviewWidgetOrientation;
@@ -248,6 +261,7 @@ class DepositaryMenu extends UIScriptedMenu
 			m_PreviewWidgetOrientation = o;
 		}
 	}
+
 	protected void BuildMessage(string headline, string MessageIndex)
 	{
 		if(!m_MessageWidget.IsVisible())
@@ -268,6 +282,7 @@ class DepositaryMenu extends UIScriptedMenu
 		}
 		
 	}
+
 	protected void GarageSystemMessage(string messageHeadline, string MessageBody, int message_type)
 	{
 		switch(message_type)
@@ -285,6 +300,7 @@ class DepositaryMenu extends UIScriptedMenu
 		}
 		BuildMessage(messageHeadline, MessageBody);
 	}
+
     void UpdateItemPreview(string itemType)
     {
         if ( !m_ItemPreviewWidget )
@@ -315,6 +331,7 @@ class DepositaryMenu extends UIScriptedMenu
 			// align to center 
 			m_ItemPreviewWidget.SetPos( -0.225, -0.225 );
     }
+
     override bool OnClick( Widget w, int x, int y, int button )
 	{
         super.OnClick(w, x, y, button);
@@ -332,14 +349,7 @@ class DepositaryMenu extends UIScriptedMenu
 				GarageSystemMessage("#garage_UI_Message_ToFast", "#garage_UI_Message_ClickToFast", 3);
 				return true;
 			}
-			#ifdef DC_BANKING
-			if(NeedPayWithBankAccount(1) && !m_isPayWithBankinActiv && Depositary_ClientManager.CanPayWithBankAccount)
-			{
-				m_ActionID = 2;
-				handleYesNoAction();
-				return true;
-			}
-			#endif
+
 			if(!Depositary_ClientManager.KeepInventory)
 			{
 				m_ActionID = 3;
@@ -369,13 +379,6 @@ class DepositaryMenu extends UIScriptedMenu
 				GarageSystemMessage("#garage_UI_Message_WARNING", "#garage_UI_Message_NoCarSelected", 3);
 				return true;
 			}
-			#ifdef DC_BANKING
-			if(NeedPayWithBankAccount(2) && !m_isPayWithBankinActiv && Depositary_ClientManager.CanPayWithBankAccount)
-			{
-				m_ActionID = 1;
-				handleYesNoAction();
-			}
-			#endif
 			else
 			{
 				HideYesNoMessage();
@@ -399,8 +402,20 @@ class DepositaryMenu extends UIScriptedMenu
 			//HideYesNoMessage();
 			return true;
 		}
+		if(w == m_BtnKey)
+		{
+			if(m_UiCooldownTimer > 0)
+			{
+				GarageSystemMessage("#garage_UI_Message_ToFast", "#garage_UI_Message_ClickToFast", 3);
+				return true;
+			}
+			m_UiCooldownTimer = Depositary_ClientManager.CooldownForGarage;
+			handleGetKey(row_index);
+			return true;
+		}
         return false;
     }
+	
     string getItemDisplayName(string itemClassname)
 	{
 		TStringArray itemInfos = new TStringArray;
@@ -439,6 +454,7 @@ class DepositaryMenu extends UIScriptedMenu
 		else
 			return itemClassname;
 	}
+
 	protected void handleYesButtonClick(int row_index)
 	{
 		if(m_ActionID == 2)
@@ -470,6 +486,7 @@ class DepositaryMenu extends UIScriptedMenu
 			}
 		}
 	}
+
 	protected bool NeedPayWithBankAccount(int action)
 	{
 		if(action == 1)
@@ -488,6 +505,7 @@ class DepositaryMenu extends UIScriptedMenu
 		}
 		return false;
 	}
+
     protected void UpdateUI()
     {
 		m_CostToParkOut.SetText(Depositary_ClientManager.CostsToParkOutVehicle.ToString());
@@ -495,6 +513,7 @@ class DepositaryMenu extends UIScriptedMenu
 		m_OnYouMoney.SetText(MoneyOnPlayer.ToString());
 		
     }
+
 	int getPlayerCurrencyAmount() // duplicate
 	{
 		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
@@ -524,6 +543,7 @@ class DepositaryMenu extends UIScriptedMenu
 		
 		return currencyAmount;
 	}
+
 	protected void handleYesNoAction()
 	{
 		switch(m_ActionID)
@@ -539,6 +559,7 @@ class DepositaryMenu extends UIScriptedMenu
 				break;
 		}
 	}
+
 	protected void BuildYesNoMessage(string Headline, string BodyMessage)
 	{
 		m_YesNoWidget.Show(true);
@@ -551,6 +572,7 @@ class DepositaryMenu extends UIScriptedMenu
 				GetGame().ObjectDelete(previewItem);
 		}
 	}
+
 	int getItemAmount(ItemBase item)
 	{
 		Magazine mgzn = Magazine.Cast(item);
@@ -567,6 +589,7 @@ class DepositaryMenu extends UIScriptedMenu
 		
 		return itemAmount;
 	}
+
 	void ShowYesNoMessage()
 	{
 		if(!m_YesNoWidget.IsVisible())
@@ -575,6 +598,15 @@ class DepositaryMenu extends UIScriptedMenu
 			m_isPayWithBankinActiv = true;
 		}
 	}
+
+	void handleGetKey(int rowindex)
+	{
+		if(rowindex != -1)
+		{
+			GetRPCManager().SendRPC("Depositary_System", "GetVehicleKey", new Param1<int>(rowindex), true);
+		}
+	}
+
 	void HideYesNoMessage()
 	{
 		if(m_YesNoWidget.IsVisible())
@@ -585,6 +617,7 @@ class DepositaryMenu extends UIScriptedMenu
 				m_MainHud.Show(true);
 		}
 	}
+
     void DestroyUIMessage()
     {
         if(m_MessageWidget)
@@ -594,6 +627,7 @@ class DepositaryMenu extends UIScriptedMenu
             m_MessageBody.SetText("");
         }
     }
+
     string TrimUntPrefix(string str)
 	{
 		str.Replace("$UNT$", "");

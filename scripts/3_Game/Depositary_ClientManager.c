@@ -8,6 +8,7 @@ class Depositary_ClientManager
 	static bool IsGarageAdmin = false;
 	static ref array< ref NPCDummyClass > m_DUMMYS;
 	static ref array< ref Currency > currencyData;
+	
     void Depositary_ClientManager()
     {
 		currencyData = new ref array<ref Currency>;
