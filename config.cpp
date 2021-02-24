@@ -30,7 +30,7 @@ class CfgMods
 		credits = "DeutscheBohrmaschine.de";
 		author = "Krypton91";
 		authorID = "0";
-		version = "1.0";
+		version = "1.11";
 		extra = 0;
 		type = "mod";
 		dependencies[] = {"Game","World","Mission"};

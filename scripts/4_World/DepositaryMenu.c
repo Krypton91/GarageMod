@@ -6,7 +6,6 @@ class DepositaryMenu extends UIScriptedMenu
 	private ButtonWidget							m_BtnYes;
 	private ButtonWidget							m_BtnNo;
 	private ButtonWidget							m_BtnKey;
-	private	ButtonWidget							m_BtnRepair;
     private TextWidget                              m_MessageHeadline;
 	private TextWidget                              m_OnYouMoney;
 	private TextWidget                              m_CostToParkOut;
