@@ -1,0 +1,16 @@
+MetaFileClass {
+ Name "{44E8F88E0DF70336}Krypton/Depositary_System/gui/fonts/Edirne22.edds"
+ Author "desktop-iihp1rg"
+ ChangeDate -720803486
+ Configurations {
+  TGAResourceClass PC {
+   SourceFile "Edirne22.tga"
+  }
+  TGAResourceClass XBOX_ONE : PC {
+  }
+  TGAResourceClass PS4 : PC {
+  }
+  TGAResourceClass LINUX : PC {
+  }
+ }
+}

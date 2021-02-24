@@ -1,0 +1,318 @@
+FrameWidgetClass GarageMainFrame {
+ position -0.00037 0.00043
+ size 1.00157 1.00496
+ halign center_ref
+ valign center_ref
+ hexactpos 0
+ vexactpos 0
+ hexactsize 0
+ vexactsize 0
+ {
+  ImageWidgetClass LayoutBackground {
+   ignorepointer 1
+   position 0 -0.00154
+   size 0.64411 0.60624
+   halign center_ref
+   valign center_ref
+   hexactpos 0
+   vexactpos 0
+   hexactsize 0
+   vexactsize 0
+   scriptclass ""
+   image0 "set:LayoutFrame image:LayoutFrame"
+   mode blend
+   "src alpha" 1
+   stretch 0
+   {
+    ButtonWidgetClass Btn_ParkOut {
+     color 0.5608 0.0706 0.0706 1
+     position 0.15045 0.38248
+     size 0.13646 0.0789
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     style DayZDefaultButtonAll
+     text "#garage_UI_BtnParkOut"
+     font "Depositary_System/gui/fonts/Edirne34"
+    }
+    TextListboxWidgetClass GarageList {
+     position -0.2923 0.09091
+     size 0.32235 0.44
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     style Default
+     colums "#vehicle_name;70;#vehicle_id;15"
+     lines 1
+     "highlight row" 1
+     font "Depositary_System/gui/fonts/Edirne22"
+    }
+    ItemPreviewWidgetClass CarPreview {
+     ignorepointer 1
+     position 0.24787 0.09004
+     size 0.28272 0.4058
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     "force flip enable" 1
+     "force flip" 1
+    }
+    ButtonWidgetClass Btn_ParkIn {
+     color 0 0.502 0.1255 1
+     position 0.34012 0.38153
+     size 0.13646 0.0789
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     style DayZDefaultButtonAll
+     text "#garage_UI_BtnParkIn"
+     font "Depositary_System/gui/fonts/Edirne34"
+    }
+    TextWidgetClass TextOnYouLbl {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position -0.312 -0.36473
+     size 0.28639 0.04066
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     style Normal
+     text "#garage_UI_OnYouMoney"
+     font "Depositary_System/gui/fonts/Edirne34"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text halign" right
+     "text valign" center
+    }
+    TextWidgetClass TextOnYouLbl0 {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position -0.31188 -0.31497
+     size 0.2861 0.04997
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     style Normal
+     text "#garage_UI_PriceParkOut"
+     font "Depositary_System/gui/fonts/Edirne34"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text halign" right
+     "text valign" center
+    }
+    TextWidgetClass TxtAvaibleCars {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position -0.29073 -0.16256
+     size 0.22679 0.07663
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     text "#garage_UI_AvaibleCars"
+     font "Depositary_System/gui/fonts/Edirne40"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text valign" center
+    }
+    TextWidgetClass ONYouLabel {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position -0.12978 -0.36614
+     size 0.07109 0.04212
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     style Normal
+     text "100.00"
+     font "Depositary_System/gui/fonts/Edirne34"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text valign" center
+    }
+    TextWidgetClass PriceToParkOutVehicle {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position -0.13008 -0.31382
+     size 0.07194 0.04857
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     text "100.00"
+     font "Depositary_System/gui/fonts/Edirne34"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text valign" center
+    }
+    TextWidgetClass YourGarage {
+     ignorepointer 1
+     color 0.8588 0.8588 0.8588 1
+     position 0.1193 -0.33367
+     size 0.43855 0.12753
+     halign right_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     draggable 0
+     text "#garage_UI_YOURGARAGE"
+     font "Depositary_System/gui/fonts/Edirne80"
+     "text color" 0.6196 0.6196 0.6196 1
+     "exact text" 0
+     "size to text h" 0
+     "size to text v" 1
+     "text valign" center
+    }
+   }
+  }
+  PanelWidgetClass MessageWidget {
+   visible 0
+   ignorepointer 1
+   position 0.03584 0.03151
+   size 0.24398 0.13647
+   halign center_ref
+   hexactpos 0
+   vexactpos 0
+   hexactsize 0
+   vexactsize 0
+   style rover_sim_black_2
+   {
+    TextWidgetClass STATEOFMESSAGE {
+     visible 1
+     ignorepointer 1
+     position 0.14315 0.0547
+     size 0.72091 0.23713
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "ERROR"
+     "text halign" center
+    }
+    MultilineTextWidgetClass ERRORBOX {
+     ignorepointer 1
+     position -0.00031 0.1448
+     size 0.97475 0.63198
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "ERROR: CANT PARK OUT VEHILCE SPAWN IS BLOCKED BY: "
+     "size to text h" 0
+     wrap 1
+    }
+   }
+  }
+  PanelWidgetClass PanelYesNo {
+   visible 0
+   ignorepointer 1
+   size 0.31738 0.20981
+   halign center_ref
+   valign center_ref
+   hexactpos 0
+   vexactpos 0
+   hexactsize 0
+   vexactsize 0
+   style rover_sim_black_2
+   "no focus" 0
+   {
+    TextWidgetClass HeadlineYesNo {
+     visible 1
+     ignorepointer 1
+     color 0.5608 0.4392 0.0706 1
+     position -0.00027 -0.35875
+     size 0.9873 0.22855
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "Headline"
+     "text halign" center
+    }
+    MultilineTextWidgetClass InfoBoxYesNo {
+     ignorepointer 1
+     position 0.00131 0.01651
+     size 0.93421 0.44766
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "Yeet you should not see this :O"
+     wrap 1
+    }
+    ButtonWidgetClass Btn_Yes {
+     color 0 0.502 0.1255 1
+     position 0.36484 0.3653
+     size 0.20167 0.15455
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "#garage_UI_Message_BtnYes"
+    }
+    ButtonWidgetClass Btn_No {
+     color 0.502 0 0 1
+     position 0.14129 0.36519
+     size 0.20167 0.15455
+     halign center_ref
+     valign center_ref
+     hexactpos 0
+     vexactpos 0
+     hexactsize 0
+     vexactsize 0
+     text "#garage_UI_Message_BtnNo"
+    }
+   }
+  }
+ }
+}

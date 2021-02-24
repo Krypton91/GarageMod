@@ -1,0 +1,6 @@
+﻿//<'Depositary_System.pbo' properties via Mikero's dos tools, dll version 7.64>
+prefix=Depositary_System;
+Mikero=DePbo.dll.7.64;
+version=Tue Jan 19 14:07:34 2021;
+PboType=Arma Addon;
+//</properties>

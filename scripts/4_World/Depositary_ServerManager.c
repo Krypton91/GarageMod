@@ -1,0 +1,1294 @@
+class Depositary_ServerManager
+{
+    protected static ref Depositary_ServerManager   m_ServerManager;
+	private bool 									m_IsParkInDisabled;
+	const string									m_HologrammClassname = "GarageMod_ParkingPositionHolo";
+    protected ref Depositary_Config                 m_Settings;
+	protected ref Depositary_AdminConfig            m_AdminList;
+	ref array< ref NPCDummyClass > 					m_DummyClasses;
+    void Depositary_ServerManager()
+    {
+		//For better mod support!
+        InitGarageServerside();
+    }
+
+	void ~Depositary_ServerManager()
+    {
+		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(this.SetIsParkinDisabled);
+    }
+
+	void InitGarageServerside()
+	{
+		m_Settings  = Depositary_Config.Load();
+		m_AdminList = Depositary_AdminConfig.Load();
+        if(GetGame().IsServer())
+        {
+            GetRPCManager().AddRPC("Depositary_System", "GarageDataRequest", this, SingleplayerExecutionType.Server);
+            GetRPCManager().AddRPC("Depositary_System", "VehicleParkinRequest", this, SingleplayerExecutionType.Server);
+            GetRPCManager().AddRPC("Depositary_System", "VehicleParkOutRequest", this, SingleplayerExecutionType.Server);
+			GetRPCManager().AddRPC("Depositary_System", "FULLCONFIGREQ", this, SingleplayerExecutionType.Server);
+			m_DummyClasses =  new ref array<ref NPCDummyClass>;
+
+			SpawnNPCs();
+
+			if(m_Settings.ServerRestartPeriods != -1){
+				int hourToLock = m_Settings.ServerRestartPeriods * 3600000;
+				int MinutesToLock = hourToLock / 60 - 5;
+				int FinalTime = MinutesToLock * 60;
+				GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(this.SetIsParkinDisabled, FinalTime, false);
+			}
+
+			if(m_Settings.IsLoggingActiv){
+				GetGarageLogger().Log("[ServerManager] -> Restart Periods of server are : " + m_Settings.ServerRestartPeriods + " Info: to Disable the parkin function befor an restart go to config and change ServerRestartPeriods to -1! \n Server Will Lock Parking in: " + FinalTime + " Minutes!");
+				GetGarageLogger().Log("[ServerManager] -> Parkin Function will be disabled 5 Minutes befor!");
+			}
+        }
+	}
+
+	void SetIsParkinDisabled()
+	{
+		GetGarageLogger().Log("[ServerManager] -> Parkin Function was locked....");
+		m_IsParkInDisabled = true;
+	}
+    string isVehicleSpawnFree(vector VehiclesSpawnPos, vector VehiclesSpawnOri)
+	{
+		vector size = "3 5 9";
+		array<Object> excluded_objects = new array<Object>;
+		array<Object> nearby_objects = new array<Object>;
+
+		GetGame().IsBoxColliding( VehiclesSpawnPos, VehiclesSpawnOri, size, excluded_objects, nearby_objects);
+		if (nearby_objects.Count() > 0)
+		{
+			string objsName = nearby_objects.Get(0).GetType();
+			int index = m_Settings.ObjectWhiteList.Find(objsName);
+			if(index == -1)
+			{
+				if(objsName == "")
+					return "FREE";
+				return objsName;
+			}
+		}
+		return "FREE";
+	}
+    //////////////////////////////////////////////////SERVERSIDE RPC////////////////////////////////////////////////////////
+	void FULLCONFIGREQ(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
+	{
+		if(type == CallType.Server)
+        {
+			GetRPCManager().SendRPC("Depositary_System", "FULLCONFIGRES", new Param6<float, bool, int, int, bool, ref array<ref Currency>>(m_Settings.CooldownForGarage, m_Settings.KeepInventory, m_Settings.CostsToParkInVehicle, m_Settings.CostsToParkOutVehicle, m_Settings.CanPayWithBankAccount, m_Settings.CurrencyConfig), true, sender);
+			GetRPCManager().SendRPC("Depositary_System", "NPCDUMMYCLASSES", new Param2<ref array<ref NPCDummyClass>, bool>(m_DummyClasses, isSenderAdmin(sender.GetPlainId())), true, sender);
+		}
+	}
+    
+    vector GetVehiclesSpawnOriByGarageID(int garageID)
+    {
+        local vector spawn_Pos = "0 0 0";
+        for(int i = 0; i < m_Settings.NPCConfig.Count(); i++)
+        {
+            if(m_Settings.NPCConfig[i].GarageID == garageID)
+            {
+                //MATCH FOUND RETRUN AND BUILD VECTOR
+                spawn_Pos[0] = m_Settings.NPCConfig[i].CARSpawnYaw;
+                spawn_Pos[1] = m_Settings.NPCConfig[i].CARSpawnPitch;
+                spawn_Pos[2] = m_Settings.NPCConfig[i].CARSpawnRoll;
+            }
+        }
+        return spawn_Pos;
+    }
+    private PlayerBase GetPlayerBySteamID(string steamid)
+    {
+        array<Man> players = new array<Man>;
+        GetGame().GetPlayers(players);
+        for(int i = 0; i < players.Count(); i++)
+        {
+            if(players.Get(i).GetIdentity().GetPlainId() == steamid)
+            {
+                return PlayerBase.Cast(players.Get(i));
+            }
+        }
+        return null;
+    }
+    void VehicleParkOutRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
+    {
+        Param3<int, int, bool> params;
+        if(!ctx.Read(params)) return;
+        if(type == CallType.Server)
+        {
+            DepositaryData playerData = DepositaryData.LoadPlayerData(sender.GetPlainId(), sender.GetName());
+            if(playerData)
+            {
+                PlayerBase player = PlayerBase.Cast(GetPlayerBySteamID(sender.GetPlainId()));
+                int CurrencyOnPlayer = GetCurrencyAmountOnPlayer(player);
+                if(CurrencyOnPlayer < m_Settings.CostsToParkOutVehicle && params.param3 == false && !m_Settings.CanPayWithBankAccount && m_Settings.CostsToParkOutVehicle != 0)
+                {
+                    GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","You dont have enought money in your Inventory!" + m_Settings.CostsToParkOutVehicle, 1), true, sender);
+                    return;
+                }
+                else
+                {
+                    ref array<ref VehicleData> vehicleData = playerData.vehicleData;
+                    for(int i = 0; i < vehicleData.Count(); i++)
+                    {
+                        if(vehicleData[i].indexID == params.param2)
+                        {
+                            EntityAI vehicle;
+							int garageID = params.param1;
+                            if(garageID == -1)
+                                return;
+                            vector vehicle_Spawn = GetVehicleSpawnPosByGarageID(garageID);
+                            vector vehicle_ori = GetVehiclesSpawnOriByGarageID(garageID);
+                            string vehiclesSpawnState = isVehicleSpawnFree(vehicle_Spawn, vehicle_ori);
+							if(!m_Settings.IsGarageGlobal && garageID != vehicleData[i].GarageID && vehicleData[i].GarageID != -1)
+							{
+								GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("ERROR","This Vehicle cant parked out here!", 1), true, sender);
+                    			return;
+							}
+                            if(vehiclesSpawnState == "FREE")
+                            {
+								if(CurrencyOnPlayer >= m_Settings.CostsToParkOutVehicle && params.param3 == false)
+								{
+									RemoveCurrencyFromPlayer(player, m_Settings.CostsToParkOutVehicle);
+								}
+								else
+								{
+									#ifdef DC_BANKING
+									bool transferstatus = PayWithBank(m_Settings.CostsToParkOutVehicle, sender.GetPlainId(), sender.GetName());
+									if(!transferstatus)
+									{
+										GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money on your bank!", 1), true, sender);
+										
+										return;
+									}
+									#else
+									GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money in your Inventory!", 1), true, sender);
+									return;
+									#endif
+								}
+								ref array<Man> m_Players = new array<Man>;
+								GetGame().GetWorld().GetPlayerList(m_Players);
+								PlayerBase currentPlayer;
+                                vehicle = EntityAI.Cast(GetGame().CreateObject(vehicleData[i].VehiclesName, vehicle_Spawn));
+								if(vehicleData[i].EngineHealth)
+									vehicle.SetHealth(vehicleData[i].EngineHealth);
+								//vehicle.SetPosition(vehicle_Spawn);
+								vehicle.SetOrientation(vehicle_ori);
+								vehicle.SetDirection(vehicle.GetDirection());
+								
+								for (int pl = 0; pl < m_Players.Count(); pl++)
+								{
+									currentPlayer = PlayerBase.Cast(m_Players.Get(pl));
+
+									if ( !currentPlayer )
+										continue;
+
+									GetGame().RPCSingleParam(currentPlayer, TRPCs.RPC_SYNC_OBJECT_ORIENTATION, new Param2<Object, vector>( vehicle, vehicle_ori ), true, currentPlayer.GetIdentity());
+								}
+                                if(vehicle)
+                                {
+									//THIS CASE IS ONLY IF MUCHCARKEY IS USED!
+									#ifdef MuchCarKey
+									ParkOutWithMuchCarKey(vehicle, vehicleData, i, player, playerData);
+									#else
+									ParkOutWithTrader(vehicle, vehicleData, i, player, playerData);
+									#endif
+								}
+                            }
+                            else
+                            {
+                                GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Vehicle Spawn was blocked by: " + vehiclesSpawnState, 1), true, sender);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+	#ifdef MuchCarKey
+	void ParkOutWithMuchCarKey(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData)
+	{
+		MCK_CarKey_Base vehicleKey;
+        for(int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
+        {
+			if(!canCreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount))
+			{
+				ItemBase playersInvItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleData[i].m_Cargo[n].ItemName, player.GetPosition()));
+				if(vehicleData[i].m_Cargo[n].Health)
+					playersInvItem.SetHealth(vehicleData[i].m_Cargo[n].Health);
+				Param1<string> msgRp0 = new Param1<string>( "Vehicle Inventory was full rest of items spawned on ground!!" );
+				GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, msgRp0, true, player.GetIdentity());
+			}
+			else
+			{
+				ItemBase item = ItemBase.Cast(CreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount, player));
+				if(vehicleData[i].m_Cargo[n].Health)
+					item.SetHealth(vehicleData[i].m_Cargo[n].Health);
+				if(Class.CastTo(vehicleKey, item))
+				{
+					//WE NO KNOW ITS AN KEY FROM HELKIANA.
+					local int KeysHashCode = 0;
+					KeysHashCode = vehicleData[i].m_Cargo[n].KeyHash;
+					if(KeysHashCode != 0)
+					{
+						//Database has the entry 
+						vehicleKey.SetNewMCKId(KeysHashCode);
+					}				
+				}
+			}
+										
+        }
+        Car car;
+        Class.CastTo(car, vehicle);
+        if (car)
+        {
+			if(vehicleData[i].FuelAmmount)
+			{
+				car.Fill( CarFluid.FUEL, vehicleData[i].FuelAmmount);
+			}
+			else
+			{
+				car.Fill( CarFluid.FUEL, car.GetFluidCapacity( CarFluid.FUEL ));
+			}
+            car.Fill( CarFluid.OIL, car.GetFluidCapacity( CarFluid.OIL ));
+            car.Fill( CarFluid.BRAKE, car.GetFluidCapacity( CarFluid.BRAKE ));
+            car.Fill( CarFluid.COOLANT, car.GetFluidCapacity( CarFluid.COOLANT ));
+
+            car.Fill( CarFluid.USER1, car.GetFluidCapacity( CarFluid.USER1 ));
+            car.Fill( CarFluid.USER2, car.GetFluidCapacity( CarFluid.USER2 ));
+            car.Fill( CarFluid.USER3, car.GetFluidCapacity( CarFluid.USER3 ));
+            car.Fill( CarFluid.USER4, car.GetFluidCapacity( CarFluid.USER4 ));
+										
+			CarScript carScript;
+			if(Class.CastTo(carScript, vehicle))
+			{
+											
+				if(vehicleData[i].VehiclesHash != 0)
+				{
+					carScript.m_HasCKAssigned = true;
+					carScript.m_CarKeyId = vehicleData[i].VehiclesHash;
+				}
+
+				carScript.SynchronizeValues();
+				if(player.m_Trader_IsInSafezone)
+				{
+					carScript.m_Trader_IsInSafezone = true;
+					car.SetAllowDamage(false);
+				}
+			}
+        }
+
+        playerData.vehicleData.Remove(i);
+        playerData.SortVehicleIDs();
+        playerData.SavePlayerData(playerData, player.GetIdentity().GetName());
+		if(m_Settings.IsLoggingActiv)
+			GetGarageLogger().LogLine(player.GetIdentity().GetName(), player.GetIdentity().GetPlainId(), player.GetPosition(), "Parked out :" + vehicle.GetType());
+		
+        GetRPCManager().SendRPC("Depositary_System", "UI_QuitRequest", null, true, player.GetIdentity());
+	}
+#else
+	void ParkOutWithTrader(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player,  DepositaryData playerData)
+	{
+		VehicleKeyBase vehicleKey;
+		for(int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
+		{
+			if(!canCreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount))
+			{
+				ItemBase PlayersInvItem = player.SpawnEntityOnGroundPos(vehicleData[i].m_Cargo[n].ItemName, player.GetPosition());
+				if(vehicleData[i].m_Cargo[n].Health)
+					PlayersInvItem.SetHealth(vehicleData[i].m_Cargo[n].Health);
+				Param1<string> msgRp0 = new Param1<string>( "Vehicle Inventory was full rest of items spawned on ground!!" );
+				GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, msgRp0, true, player.GetIdentity());
+			}
+			else
+			{
+				ItemBase item = ItemBase.Cast(CreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount, player));
+				if(vehicleData[i].m_Cargo[n].Health)
+					item.SetHealth(vehicleData[i].m_Cargo[n].Health);
+				if(Class.CastTo(vehicleKey, item))
+				{
+					//WE NO KNOW ITS AN KEY FROM JONES. Danke Für deine Arbeit Brudi <3
+					local int KeysHashCode = 0;
+					KeysHashCode = vehicleData[i].m_Cargo[n].KeyHash;
+					if(KeysHashCode != 0)
+					{
+						vehicleKey.SetNewHash(KeysHashCode);
+					}
+					
+				}
+			}
+		}
+		Car car;
+		Class.CastTo(car, vehicle);
+		if (car)
+		{
+			if(vehicleData[i].FuelAmmount)
+			{
+				car.Fill( CarFluid.FUEL, vehicleData[i].FuelAmmount);
+			}
+			else
+			{
+				car.Fill( CarFluid.FUEL, car.GetFluidCapacity( CarFluid.FUEL ));
+			}
+			car.Fill( CarFluid.OIL, car.GetFluidCapacity( CarFluid.OIL ));
+			car.Fill( CarFluid.BRAKE, car.GetFluidCapacity( CarFluid.BRAKE ));
+			car.Fill( CarFluid.COOLANT, car.GetFluidCapacity( CarFluid.COOLANT ));
+
+			car.Fill( CarFluid.USER1, car.GetFluidCapacity( CarFluid.USER1 ));
+			car.Fill( CarFluid.USER2, car.GetFluidCapacity( CarFluid.USER2 ));
+			car.Fill( CarFluid.USER3, car.GetFluidCapacity( CarFluid.USER3 ));
+			car.Fill( CarFluid.USER4, car.GetFluidCapacity( CarFluid.USER4 ));
+			
+			CarScript carScript;
+			if(Class.CastTo(carScript, vehicle))
+			{
+				if(vehicleData[i].VehiclesHash != 0)
+				{
+					carScript.m_Trader_HasKey = true;
+					carScript.m_Trader_VehicleKeyHash = vehicleData[i].VehiclesHash;
+					
+				}
+
+				carScript.SynchronizeValues();
+				if(player.m_Trader_IsInSafezone)
+				{
+					carScript.m_Trader_IsInSafezone = true;
+					car.SetAllowDamage(false);
+				}
+			}
+		}
+		playerData.vehicleData.Remove(i);
+		playerData.SortVehicleIDs();
+		playerData.SavePlayerData(playerData, player.GetIdentity().GetName());
+		if(m_Settings.IsLoggingActiv)
+			GetGarageLogger().LogLine(player.GetIdentity().GetName(), player.GetIdentity().GetPlainId(), player.GetPosition(), " Parked out :" + vehicle.GetType());
+		GetRPCManager().SendRPC("Depositary_System", "UI_QuitRequest", null, true, player.GetIdentity());
+	}
+	#endif
+
+    void VehicleParkinRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
+    {
+        Param2<int, bool> params;
+        if(!ctx.Read(params)) return;
+        if(type == CallType.Server)
+        {
+			if(m_IsParkInDisabled){
+				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","PARKIN FUNCTION IS DISABLED (RESTART IS CLOSE)!" + m_Settings.CostsToParkInVehicle, 1), true, sender);
+                 return;
+			}
+
+            DepositaryData playerData = DepositaryData.LoadPlayerData(sender.GetPlainId(), sender.GetName());
+            if(playerData)
+            {
+                PlayerBase player = PlayerBase.Cast(GetPlayerBySteamID(sender.GetPlainId()));
+                int CurrencyOnPlayer = GetCurrencyAmountOnPlayer(player);
+				if(CurrencyOnPlayer < m_Settings.CostsToParkInVehicle && params.param2 == false && m_Settings.CostsToParkInVehicle != 0)
+				{
+						GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","You dont have enough money in your Inventory!" + m_Settings.CostsToParkInVehicle, 1), true, sender);
+                    	return;
+				}
+				if(playerData.AmountOfParkedVehicles() + 1 <= m_Settings.MaxVehiclesToStore || isSenderAdmin(sender.GetPlainId()))
+				{
+	                Object car = GetVehicleParkPosWithGarageID(params.param1);
+	                if(car)
+	                {
+						if(isVehicleBlackListet(car.GetType()))
+						{
+							GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry but this Vehicle is Blacklistet by an Admin!", 1), true, sender);
+                    		return;
+						}
+						//Todo Add here MoneyHandling
+						#ifdef MuchCarKey
+						ParkInWithMuchCarKey(car, player, sender, CurrencyOnPlayer, params.param2, playerData, params.param1);
+						#else
+						ParkinWithTrader(car, player, sender, CurrencyOnPlayer, params.param2, playerData, params.param1);
+						#endif
+	                }
+					else
+					{
+						GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","No Vehicle in Park Pos found!", 1), true, sender);
+					}
+                }
+				else
+				{
+					GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Your Garage is already full!", 1), true, sender);
+				}
+            }
+        }
+    }
+#ifdef MuchCarKey
+	void ParkInWithMuchCarKey(Object car, PlayerBase player, PlayerIdentity sender, int CurrencyOnPlayer, bool banking, DepositaryData playerData, int GarageID)
+	{
+		ref array<ref VehicleCargo> Cargo = new array<ref VehicleCargo>;
+		int VehicleHash = 0;
+	    array<EntityAI> items = new array<EntityAI>();
+	    EntityAI vehicle;
+	    if( Class.CastTo(vehicle, car))
+	    {
+			CarScript carScript = CarScript.Cast(vehicle);
+			if(carScript && carScript.m_Trader_LastDriverId != sender.GetId() || carScript.m_Trader_LastDriverId == string.Empty)
+			{
+				//WAS NOT LAST DRIVER!!
+				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","#garage_UI_Message_WasNotLastDriver", 1), true, sender);
+				return;
+			}
+			//Money
+			if(CurrencyOnPlayer >= m_Settings.CostsToParkInVehicle && banking == false)
+			{
+				RemoveCurrencyFromPlayer(player, m_Settings.CostsToParkInVehicle);
+			}
+			else
+			{
+				#ifdef DC_BANKING
+				bool transferstatus = PayWithBank(m_Settings.CostsToParkInVehicle, sender.GetPlainId(), sender.GetName());
+				if(!transferstatus)
+				{
+					GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money on your bank!", 1), true, sender);
+                    return;
+				}
+				#else
+				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money in your Inventory!", 1), true, sender);
+                return;
+				#endif
+			}
+	        vehicle.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER,items);
+			VehicleHash = carScript.m_CarKeyId;
+	        Cargo.Clear();
+			int insertIndex = playerData.GetNextVehicleIndex();
+			if(m_Settings.KeepInventory == false)
+			{
+				//Attachments from Car.
+				if(vehicle.GetInventory())
+				{
+					GameInventory inv = vehicle.GetInventory();
+					int attachmentCount = inv.AttachmentCount();
+					for(int y = 0; y < attachmentCount; y++)
+					{
+						EntityAI vhAttachment = inv.GetAttachmentFromIndex(y);
+						if(vhAttachment.IsRuined())
+								continue;
+						Cargo.Insert(new VehicleCargo(vhAttachment.GetType(), vhAttachment.GetQuantity(), vhAttachment.GetHealth()));
+										
+					}
+				}
+			}
+			else
+			{
+		        for(int i = 0; i < items.Count(); i++)
+		        {
+					ItemBase item = ItemBase.Cast(items[i]);
+					if(!item)
+						continue;
+					if(item.GetType() == vehicle.GetType())
+						continue;
+					if(item.IsRuined())
+						continue;
+					MCK_CarKey_Base key;
+					if(Class.CastTo(key, item) && m_Settings.KeepInventory == true)
+					{
+						Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth(), key.GetMCKId()));
+					}
+					else
+					{
+						//Insert with Hash 0!!!
+						if(m_Settings.KeepInventory == true)
+							Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth()));
+					}
+		        }
+			}
+			if(m_Settings.IsLoggingActiv)
+				GetGarageLogger().LogLine(sender.GetName(), sender.GetPlainId(), player.GetPosition(), "Parked in : " + vehicle.GetType() + " " + Cargo.Count() + " items stored to DB!");
+	        InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());    
+	        GetGame().ObjectDelete(car);
+	    }
+	}
+#else
+	void ParkinWithTrader(Object car, PlayerBase player, PlayerIdentity sender, int CurrencyOnPlayer, bool banking, DepositaryData playerData, int GarageID)
+	{
+		ref array<ref VehicleCargo> Cargo = new array<ref VehicleCargo>;
+		int VehicleHash = 0;
+	    array<EntityAI> items = new array<EntityAI>();
+	    EntityAI vehicle;
+		CarScript carScript;
+	    if( Class.CastTo(vehicle, car))
+	    {
+			carScript = CarScript.Cast(vehicle);
+			if(carScript && carScript.m_Trader_LastDriverId != sender.GetId() || carScript.m_Trader_LastDriverId == string.Empty)
+			{
+				//WAS NOT LAST DRIVER!!
+				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","#garage_UI_Message_WasNotLastDriver", 1), true, sender);
+				return;
+			}
+			if(CurrencyOnPlayer >= m_Settings.CostsToParkInVehicle && banking == false)
+			{
+				RemoveCurrencyFromPlayer(player, m_Settings.CostsToParkInVehicle);
+			}
+			else
+			{
+				#ifdef DC_BANKING
+				bool transferstatus = PayWithBank(m_Settings.CostsToParkInVehicle, sender.GetPlainId(), sender.GetName());
+				if(transferstatus == false)
+				{
+					GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money on your bank!", 1), true, sender);
+                    return;
+				}
+				#else
+				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","Sorry, but you dont have enough money in your Inventory!", 1), true, sender);
+                return;
+				#endif
+			}
+	        vehicle.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER,items);
+			VehicleHash = carScript.m_Trader_VehicleKeyHash;
+	        Cargo.Clear();
+			int insertIndex = playerData.GetNextVehicleIndex();
+			if(m_Settings.KeepInventory == false)
+			{
+				//Attachments from Car.
+				if(vehicle.GetInventory())
+				{
+					GameInventory inv = vehicle.GetInventory();
+					int attachmentCount = inv.AttachmentCount();
+					for(int y = 0; y < attachmentCount; y++)
+					{
+						EntityAI vhAttachment = inv.GetAttachmentFromIndex(y);
+						if(vhAttachment.IsRuined())
+								continue;
+							Cargo.Insert(new VehicleCargo(vhAttachment.GetType(), vhAttachment.GetQuantity(), vhAttachment.GetHealth()));			
+					}
+				}
+			}
+			else
+			{
+		        for(int i = 0; i < items.Count(); i++)
+		        {
+					ItemBase item = ItemBase.Cast(items[i]);
+						if(!item)
+							continue;
+						if(item.GetType() == vehicle.GetType())
+							continue;
+						if(item.IsRuined())
+							continue;
+
+						VehicleKeyBase key;
+						if(Class.CastTo(key, item) && m_Settings.KeepInventory == true)
+						{
+							Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth(), key.GetHash()));
+						}
+						else
+						{
+							if(m_Settings.KeepInventory == true)
+								Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth()));
+						}
+		            }
+				}
+				if(m_Settings.IsLoggingActiv)
+					GetGarageLogger().LogLine(sender.GetName(), sender.GetPlainId(), player.GetPosition(), "Parked in : " + vehicle.GetType() + " " + Cargo.Count() + " items stored to DB!");
+				if(!m_Settings.IsGarageGlobal)
+				{
+					//Safe The GarageID to File
+					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+				}
+				else
+				{
+					//Insert with GarageID -1 = Global
+					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+				}
+	            GetGame().ObjectDelete(car);
+	    }
+	}
+#endif
+	//!Returns if a Vehicle is Blacklistet by an Admin.
+	protected bool isVehicleBlackListet(string VehiclesName)
+	{
+		for(int i = 0; i < m_AdminList.VehicleBlackList.Count(); i++)
+		{
+			if(VehiclesName == m_AdminList.VehicleBlackList[i])
+				return true;
+		}
+		return false;
+	}
+	//DC DC_Banking
+	#ifdef DC_BANKING
+	protected bool PayWithBank(int amountToRemove, string steamID, string PlayerName)
+	{
+		DC_BankingData playerData = DC_BankingData.LoadPlayerData(steamID, PlayerName);
+		if(playerData)
+		{
+			if(playerData.GetOwnedCurrency() >= amountToRemove)
+			{
+				playerData.SetOwnedCurrency(playerData.GetOwnedCurrency() - amountToRemove);
+				DC_BankingData.SavePlayerData(playerData);
+				return true;
+			}
+		}
+		return false;
+	}
+	#endif
+    protected void InsertNewVehicle(int index, string VehicleName, int VehicleHash, int GaragenID, /*ref TStringArray cargo*/ref array<ref VehicleCargo> this_cargo, DepositaryData playerData, string AccountName, float EngineHealth, float tank_fuelAmmount)
+    {
+        playerData.InsertNewVehicle(VehicleName, index, VehicleHash, GaragenID, this_cargo, EngineHealth, tank_fuelAmmount);
+        playerData.SavePlayerData(playerData, AccountName);
+    }
+	void GarageDataRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
+    {
+		if(type == CallType.Server)
+        {
+			DepositaryData playerData = DepositaryData.LoadPlayerData(sender.GetPlainId(), sender.GetName());
+			if(playerData)
+			{
+			    GetRPCManager().SendRPC("Depositary_System", "RequestResponse", new Param1<ref array<ref VehicleData>>(playerData.vehicleData), true, sender);
+			}
+        }
+    }
+
+    /////////////////////////////////////////////////////HELPER///////////////////////////////////////////////////////////
+    void SpawnNPCs()
+    {
+		//Todo: add an hologram for parkin / park out position here.
+        for(int i = 0; i < m_Settings.NPCConfig.Count(); i++)
+        {
+            vector spawnPos;
+            vector objectOrientation;
+            spawnPos[0] = m_Settings.NPCConfig[i].NPCSpawnPosX;
+            spawnPos[1] = m_Settings.NPCConfig[i].NPCSpawnPosY;
+            spawnPos[2] = m_Settings.NPCConfig[i].NPCSpawnPosZ;
+            objectOrientation[0] = m_Settings.NPCConfig[i].NPCSpawnYaw;
+            objectOrientation[1] = m_Settings.NPCConfig[i].NPCSpawnPitch;
+            objectOrientation[2] = m_Settings.NPCConfig[i].NPCSpawnRoll;
+            Object obj = Object.Cast(GetGame().CreateObject(m_Settings.NPCConfig[i].NPCCharacterName, spawnPos, false, false, true));
+            if(!obj)
+                continue;
+				if(m_Settings.IsLoggingActiv)
+					GetGarageLogger().Log("[GarageSystem] ->  " + m_Settings.NPCConfig[i].NPCCharacterName + " Spawned on: " + spawnPos.ToString());
+            obj.SetPosition(spawnPos);
+            obj.SetOrientation(objectOrientation);
+            PlayerBase man;
+            if (Class.CastTo(man, obj))
+		    {
+			    man.SetAllowDamage(false);
+			    man.m_Depositary_IsGarageNPC = true;
+				man.m_GarageID = m_Settings.NPCConfig[i].GarageID;
+                ref TStringArray items = m_Settings.NPCConfig[i].NPCAttachments;
+
+                for(int n = 0; n < items.Count(); n++)
+                {
+                    man.GetInventory().CreateInInventory(items[n]);
+                    if(m_Settings.IsLoggingActiv)
+						GetGarageLogger().Log("[GarageSystem] ->  " + m_Settings.NPCConfig[i].NPCCharacterName + " ItemAttached: " + items[n]);
+                }
+            }
+			else
+			{
+				vector garage_pos;
+				garage_pos[0] = m_Settings.NPCConfig[i].NPCSpawnPosX;
+				garage_pos[1] = m_Settings.NPCConfig[i].NPCSpawnPosY;
+				garage_pos[2] = m_Settings.NPCConfig[i].NPCSpawnPosZ;
+				m_DummyClasses.Insert(new ref NPCDummyClass(m_Settings.NPCConfig[i].GarageID, garage_pos));
+				if(m_Settings.IsLoggingActiv)
+						GetGarageLogger().Log("[GarageSystem] ->  " + m_Settings.NPCConfig[i].NPCCharacterName + " NPC DUMMY CLASS FOUND!");
+			}
+			
+			//new for Hologramms
+			if(m_Settings.ShowParkinParkOutPos)
+			{
+				//Only do it if serveradmin allowed it.
+				GetGarageLogger().Log("[GarageSystem] ->  Hologram Spawn Enabled! spawning!");
+				vector HologramPos;
+				HologramPos[0] = m_Settings.NPCConfig[i].CARSpawnPosX;
+				HologramPos[1] = m_Settings.NPCConfig[i].CARSpawnPosY;
+				HologramPos[2] = m_Settings.NPCConfig[i].CARSpawnPosZ;
+				vector ParkPostionRoation;
+				ParkPostionRoation[0] = m_Settings.NPCConfig[i].CARSpawnYaw;
+				ParkPostionRoation[1] = m_Settings.NPCConfig[i].CARSpawnPitch;
+				ParkPostionRoation[2] = m_Settings.NPCConfig[i].CARSpawnRoll;
+				SpawnHologrammOnPosition(HologramPos, ParkPostionRoation);
+
+			}
+			else
+			{
+				GetGarageLogger().Log("[GarageSystem] ->  Hologram Spawn Disabled skipping!");
+			}
+        }
+    }
+	//!Spawns a hologramm for Parkin/Parkout Position!
+	protected void SpawnHologrammOnPosition(vector HologramPosition, vector ParkOrientation)
+	{
+		if(!HologramPosition || !ParkOrientation)
+			return;
+		
+		ItemBase g_hologram = ItemBase.Cast(GetGame().CreateObject(m_HologrammClassname, HologramPosition));
+		if(!g_hologram) return;
+
+		g_hologram.SetOrientation(ParkOrientation);
+
+		GetGarageLogger().Log("[GarageSystem] ->  Spawned Hologram on Positon: " + HologramPosition.ToString());
+	}
+	//!Gets the current Ammount of Money on Player.
+    protected int GetCurrencyAmountOnPlayer(PlayerBase player)
+	{
+		int currencyAmountOnPlayer = 0;
+		
+		array<EntityAI> inventory = new array<EntityAI>;
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, inventory);
+		
+		
+		ItemBase item;
+		for (int i = 0; i < inventory.Count(); i++)
+		{
+			Class.CastTo(item, inventory.Get(i));
+			if (item)
+			{
+				for (int j = 0; j < m_Settings.CurrencyConfig.Count(); j++)
+				{
+					if(item.GetType() == m_Settings.CurrencyConfig[j].Currency_Name)
+					{
+						if(GetItemQuantityMax(item) == 0)
+						{
+							currencyAmountOnPlayer += m_Settings.CurrencyConfig[j].Currency_Amount;
+						}
+						else
+						{
+							currencyAmountOnPlayer += GetItemQuantity(item) * m_Settings.CurrencyConfig[j].Currency_Amount;
+						}
+					}
+				}
+			}
+		}
+		return currencyAmountOnPlayer;
+	}
+    protected void RemoveCurrencyFromPlayer(PlayerBase player, int amountToRemove)
+	{
+		int amountStillNeeded = amountToRemove;
+		
+		array<EntityAI> inventory = new array<EntityAI>;
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, inventory);
+		
+		ItemBase item;
+		
+		int currencyValue;
+		int quantityNeeded;
+		for(int i = inventory.Count() - 1; i >= 0; i--)
+		{
+			for(int j = 0; j < m_Settings.CurrencyConfig.Count(); j++)
+			{
+				if(m_Settings.CurrencyConfig[j].Currency_Name == inventory.Get(i).GetType())
+				{
+					Class.CastTo(item, inventory.Get(i));
+					if(item)
+					{
+						currencyValue = m_Settings.CurrencyConfig[j].Currency_Amount;
+						quantityNeeded = amountStillNeeded / currencyValue;
+						if(GetItemQuantityMax(item) == 0)
+						{
+							GetGame().ObjectDelete(item);
+							if(quantityNeeded >= 1)
+							{
+								amountStillNeeded -= currencyValue;
+							}
+							else
+							{
+								AddCurrencyToPlayer(player, currencyValue - amountStillNeeded);							
+							}
+						}
+						else
+						{
+							if(quantityNeeded >= GetItemQuantity(item))
+							{
+								amountStillNeeded -= GetItemQuantity(item) * currencyValue;
+								GetGame().ObjectDelete(item);
+							}
+							else
+							{
+								SetItemAmount(item, GetItemQuantity(item) - quantityNeeded);
+								amountStillNeeded -= quantityNeeded * currencyValue;
+								
+								if(amountStillNeeded < currencyValue)
+								{
+									if(GetItemQuantity(item) == 1)
+									{
+										GetGame().ObjectDelete(item);
+									}
+									else
+									{
+										SetItemAmount(item, GetItemQuantity(item) - 1);
+									}
+									AddCurrencyToPlayer(player, currencyValue - amountStillNeeded);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	//!Returns if Sender is an Admin
+	protected bool isSenderAdmin(string streamID)
+	{
+		for(int i = 0; i < m_AdminList.Admins.Count(); i++)
+		{
+			if(streamID == m_AdminList.Admins[i])
+				return true;
+		}
+		return false;
+	}
+	//!This returns the Vehicle Spawn pos from a sepcify Garage.
+	protected vector GetVehicleSpawnPosByGarageID(int GarageID)
+	{
+		local vector vehpos = "0 0 0";
+		for(int i = 0; i < m_Settings.NPCConfig.Count(); i++)
+		{
+			if(m_Settings.NPCConfig[i].GarageID == GarageID)
+			{
+				vehpos[0] = m_Settings.NPCConfig[i].CARSpawnPosX;
+				vehpos[1] = m_Settings.NPCConfig[i].CARSpawnPosY;
+				vehpos[2] = m_Settings.NPCConfig[i].CARSpawnPosZ;
+			}
+		}
+		return vehpos;
+	}
+	//!This returns an vector with the SpawnOri. n from a Garage with the ID.
+	protected vector GetVehicleSpawnOriByGarageID(int GarageID)
+	{
+		local vector vehori = "0 0 0";
+		for(int i = 0; i < m_Settings.NPCConfig.Count(); i++)
+		{
+			if(m_Settings.NPCConfig[i].GarageID == GarageID)
+			{
+				vehori[0] = m_Settings.NPCConfig[i].CARSpawnYaw;
+				vehori[1] = m_Settings.NPCConfig[i].CARSpawnPitch;
+				vehori[2] = m_Settings.NPCConfig[i].CARSpawnRoll;
+			}
+		}
+		return vehori;
+	}
+	//!This Gets the Quantity from an item.
+    protected int GetItemQuantity(ItemBase item)
+	{
+		if(!item)
+		{
+			return 0;
+		}
+		
+		if(item.IsMagazine())
+		{
+			Magazine magazineItem = Magazine.Cast(item);
+			if(magazineItem)
+			{
+				return magazineItem.GetAmmoCount();
+			}
+		}
+		return item.GetQuantity();
+	}
+	//!This adds Currency to Player.
+    protected void AddCurrencyToPlayer(PlayerBase player, int amountToAdd)
+	{
+		int amountStillNeeded = amountToAdd;
+		
+		int maxQuantity;
+		int currencyValue;
+		int quantityNeeded;
+		int quantityLeftToAdd;
+		
+		
+		for(int i = 0; i < m_Settings.CurrencyConfig.Count(); i++)
+		{
+			currencyValue = m_Settings.CurrencyConfig[i].Currency_Amount;
+			string cursname = m_Settings.CurrencyConfig[i].Currency_Name;
+			quantityNeeded = amountStillNeeded / currencyValue;
+			if(quantityNeeded > 0)
+			{
+				quantityLeftToAdd = AddCurrencyToInventory(player, cursname, quantityNeeded);
+				amountStillNeeded -= (quantityNeeded - quantityLeftToAdd) * currencyValue;
+			}
+		}
+	}
+	//!This adds Currency to Players Inventory.
+    protected int AddCurrencyToInventory(PlayerBase player, string Currency_Name, int quantityToAdd)
+	{
+		if(quantityToAdd <= 0)
+		{
+			return 0;
+		}
+		
+		int quantityLeftToAdd = quantityToAdd;
+		
+		array<EntityAI> inventory = new array<EntityAI>;
+		player.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, inventory);
+		ItemBase currencyItem;
+		
+		int addableQuantity;
+		
+		for(int i = 0; i < inventory.Count(); i++) //Add currency to already in the inventory existing currency
+		{
+			if(inventory.Get(i).GetType() == Currency_Name)
+			{
+				Class.CastTo(currencyItem, inventory.Get(i));
+				if(currencyItem)
+				{
+					addableQuantity = GetItemQuantityMax(currencyItem) - GetItemQuantity(currencyItem);
+					if(addableQuantity > 0)
+					{
+						if(addableQuantity >= quantityLeftToAdd)
+						{
+							SetItemAmount(currencyItem, GetItemQuantity(currencyItem) + quantityLeftToAdd);
+							quantityLeftToAdd = 0;
+						}
+						else
+						{
+							SetItemAmount(currencyItem, GetItemQuantityMax(currencyItem));
+							quantityLeftToAdd -= addableQuantity;
+						}
+					}
+					
+					if(quantityLeftToAdd == 0)
+					{
+						return 0;
+					}
+				}
+			}
+		}
+		
+		EntityAI createdCurrencyEntity;
+		int currencyItemMaxQuantity;
+		InventoryLocation invLocation = new InventoryLocation();
+		while(player.GetInventory().FindFirstFreeLocationForNewEntity(Currency_Name, FindInventoryLocationType.CARGO, invLocation)) //Create new currency in the inventory
+		{
+			createdCurrencyEntity = player.GetHumanInventory().CreateInInventory(Currency_Name);
+			Class.CastTo(currencyItem, createdCurrencyEntity);
+			if(currencyItem)
+			{
+				currencyItemMaxQuantity = GetItemQuantityMax(currencyItem);
+				if(currencyItemMaxQuantity == 0)
+				{
+					SetItemAmount(currencyItem, 0);
+					quantityLeftToAdd -= 1;
+				}
+				else
+				{
+					if(quantityLeftToAdd <= currencyItemMaxQuantity)
+					{
+						SetItemAmount(currencyItem, quantityLeftToAdd);
+						quantityLeftToAdd = 0;
+					}
+					else
+					{
+						SetItemAmount(currencyItem, currencyItemMaxQuantity);
+						quantityLeftToAdd -= currencyItemMaxQuantity;
+					}
+				}
+				
+				if(quantityLeftToAdd == 0)
+				{
+					return 0;
+				}
+			}
+			else
+			{
+				break;
+			}
+		}
+		
+		if(!player.GetHumanInventory().GetEntityInHands()) //Create new currency in the hands of the player
+		{
+			createdCurrencyEntity = player.GetHumanInventory().CreateInHands(Currency_Name);
+			Class.CastTo(currencyItem, createdCurrencyEntity);
+			if(currencyItem)
+			{
+				currencyItemMaxQuantity = GetItemQuantityMax(currencyItem);
+				if(currencyItemMaxQuantity == 0)
+				{
+					SetItemAmount(currencyItem, 0);
+					quantityLeftToAdd -= 1;
+				}
+				else
+				{
+					if(quantityLeftToAdd <= currencyItemMaxQuantity)
+					{
+						SetItemAmount(currencyItem, quantityLeftToAdd);
+						quantityLeftToAdd = 0;
+					}
+					else
+					{
+						SetItemAmount(currencyItem, currencyItemMaxQuantity);
+						quantityLeftToAdd -= currencyItemMaxQuantity;
+					}
+				}
+				
+				if(quantityLeftToAdd == 0)
+				{
+					return 0;
+				}
+			}
+		}
+		return quantityLeftToAdd;
+	}
+	//returns an List which holds item what are merge able.
+	array<ItemBase> GetMergeableItemsFromVehicleInventroy(EntityAI vehicle, string itemType, int amount, bool absolute = false)
+	{
+		array<ItemBase> mergableItems = new array<ItemBase>;
+
+		array<EntityAI> itemsArray = new array<EntityAI>;		
+		vehicle.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER, itemsArray);
+
+		ItemBase itemToCombine = ItemBase.Cast(GetGame().CreateObject(itemType, "0 0 0"));
+
+		if (!itemToCombine)
+			return new array<ItemBase>;
+
+		SetItemAmount(itemToCombine, amount);
+
+		ItemBase item;		
+		for (int i = 0; i < itemsArray.Count(); i++)
+		{
+			Class.CastTo(item, itemsArray.Get(i));
+
+			if (!item)
+				continue;
+
+			if (item.IsRuined())
+				continue;
+
+			if (itemToCombine.GetType() != item.GetType())
+				continue;
+
+			if (item.CanBeCombined(itemToCombine) && GetItemAmount(item) < GetItemMaxQuantity(item.GetType()))
+			{
+				amount -= GetItemMaxQuantity(item.GetType()) - GetItemAmount(item);
+				SetItemAmount(itemToCombine, amount);
+				mergableItems.Insert(item);
+			}
+		}
+
+		GetGame().ObjectDelete(itemToCombine);
+
+		if (absolute && amount > 0)
+			return new array<ItemBase>;
+
+		return mergableItems;
+	}
+	//!returns the max Quanity from an Item.
+	int GetItemMaxQuantity(string itemClassname) // duplicate
+	{
+		TStringArray searching_in = new TStringArray;
+		searching_in.Insert( CFG_MAGAZINESPATH  + " " + itemClassname + " count");
+		//searching_in.Insert( CFG_WEAPONSPATH );
+		searching_in.Insert( CFG_VEHICLESPATH + " " + itemClassname + " varQuantityMax");
+
+		for ( int s = 0; s < searching_in.Count(); ++s )
+		{
+			string path = searching_in.Get( s );
+
+			if ( GetGame().ConfigIsExisting( path ) )
+			{
+				return g_Game.ConfigGetInt( path );
+			}
+		}
+
+		return 0;
+	}
+	//!Creates an Item in Vehicle
+	EntityAI CreateItemInVehicleInventory(EntityAI vehicle, string itemType, int amount, PlayerBase player)
+	{		
+		EntityAI entity;
+
+		array<ItemBase> mergeableItems = GetMergeableItemsFromVehicleInventroy(vehicle, itemType, amount);
+
+		bool isMergingPossible = mergeableItems.Count() > 0;
+		bool itemsAreLeftOverMerging = GetMergeableItemsFromVehicleInventroy(vehicle, itemType, amount, true).Count() == 0;
+			if (isMergingPossible)
+			{
+				if (itemsAreLeftOverMerging)
+				{
+					entity = vehicle.SpawnEntityOnGroundPos(itemType, vehicle.GetPosition());
+				}
+				else
+				{
+					entity = vehicle.SpawnEntityOnGroundPos(itemType, vehicle.GetPosition());
+				}
+			}
+			else
+			{
+				entity = vehicle.GetInventory().CreateInInventory(itemType);
+			}
+	
+			if (!entity)
+				return null;
+	
+			ItemBase item;
+			Class.CastTo(item, entity);
+	
+			if (!item)
+				return null;
+			
+			SetItemAmount(item, amount);
+	
+			for (int i = 0; i < mergeableItems.Count(); i++)
+			{
+				int mergeQuantity;
+	
+				if (GetItemAmount(mergeableItems.Get(i)) + GetItemAmount(item) <= GetItemMaxQuantity(mergeableItems.Get(i).GetType()))
+					mergeQuantity = GetItemAmount(item);
+				else
+					mergeQuantity = GetItemMaxQuantity(mergeableItems.Get(i).GetType()) - GetItemAmount(mergeableItems.Get(i));
+	
+	
+				SetItemAmount(mergeableItems.Get(i), GetItemAmount(mergeableItems.Get(i)) + mergeQuantity);
+				SetItemAmount(item, GetItemAmount(item) - mergeQuantity);
+				amount -= mergeQuantity;
+	
+				if (item)
+				{
+					if (GetItemAmount(item) <= 0 || amount <= 0)
+					{
+						GetGame().ObjectDelete(item);
+	
+						return null;
+					}
+				}
+			}
+		return item;
+	}
+	//!returns true or false if the vehicle inv can not store the item.
+	bool canCreateItemInVehicleInventory(EntityAI vehicle, string itemType, int amount)
+	{
+		array<ItemBase> mergeableItems = GetMergeableItemsFromVehicleInventroy(vehicle, itemType, amount);
+		if (mergeableItems.Count() > 0)
+			return true;
+
+		ItemBase item = ItemBase.Cast(GetGame().CreateObject(itemType, "0 0 0"));
+		if (!item)
+			return false;
+
+		SetItemAmount(item, amount);
+		if(vehicle.GetInventory().CanAddEntityToInventory(item))
+		{
+			GetGame().ObjectDelete(item);
+			return true;
+		}
+		GetGame().ObjectDelete(item);
+
+		return false;			
+	}
+	//!Sets the Ammount of an Item.
+	bool SetItemAmount(ItemBase item, int amount)
+	{
+		if (!item)
+			return false;
+
+		if (amount == -1)
+			amount = GetItemMaxQuantity(item.GetType());
+
+		if (amount == -3)
+			amount = 0;
+
+		if (amount == -4)
+			amount = 0;
+
+		if (amount == -5)
+			amount = Math.RandomIntInclusive(GetItemMaxQuantity(item.GetType()) * 0.5, GetItemMaxQuantity(item.GetType()));
+
+		Magazine mgzn = Magazine.Cast(item);
+				
+		if( item.IsMagazine() )
+		{
+			if (!mgzn)
+				return false;
+
+			mgzn.ServerSetAmmoCount(amount);
+		}
+		else
+		{
+			item.SetQuantity(amount);
+		}
+
+		return true;
+	}
+	//!this returns you the first object from a park position if something is blocking the position.
+    Object GetVehicleParkPosWithGarageID(int garageID)
+	{
+		vector size = "3 5 9";
+		array<Object> excluded_objects = new array<Object>;
+		array<Object> nearby_objects = new array<Object>;
+		if (GetGame().IsBoxColliding(GetVehicleSpawnPosByGarageID(garageID), GetVehicleSpawnOriByGarageID(garageID), size, excluded_objects, nearby_objects))
+		{
+			for (int i = 0; i < nearby_objects.Count(); i++)
+			{
+					bool vehicleIsEmpty = true;
+
+					Transport transport;
+					Class.CastTo(transport, nearby_objects.Get(i));
+					if (transport)
+					{
+						int crewSize = transport.CrewSize();
+						for (int c = 0; c < crewSize; c++)
+						{
+							if (transport.CrewMember(c))
+								vehicleIsEmpty = false;
+						}
+					}
+					else
+					{
+						continue;
+					}
+
+					if (!vehicleIsEmpty)
+						continue;
+
+					return nearby_objects.Get(i);						
+			}
+		}
+		return NULL;
+	}
+	//!Retrurns the Ammount of the current item.
+	int GetItemAmount(ItemBase item) // duplicate
+	{
+		Magazine mgzn = Magazine.Cast(item);
+				
+		int itemAmount = 0;
+		if( item.IsMagazine() )
+		{
+			itemAmount = mgzn.GetAmmoCount();
+		}
+		else
+		{
+			itemAmount = QuantityConversions.GetItemQuantity(item);
+		}
+		
+		return itemAmount;
+	}
+    protected int GetItemQuantityMax(ItemBase item)
+	{
+		if(!item)
+		{
+			return 0;
+		}
+		
+		if(item.IsMagazine())
+		{
+			Magazine magazineItem = Magazine.Cast(item);
+			if(magazineItem)
+			{
+				return magazineItem.GetAmmoMax();
+			}
+		}
+		return item.GetQuantityMax();
+	}
+    /** Instance Handling 
+		You can just use ref Depositary_ServerManager m_GarageServerside;
+		m_GarageServerside = Depositary_ServerManager.GetInstance();
+		Use it: 
+			bool isGarageAdmin = m_GarageServerside.IsSenderAdmin("ExampleSteamID");
+			this example will return true if the player is an Garage Admin or not.
+	**/
+    static Depositary_ServerManager GetInstance()
+    {
+        if(!m_ServerManager)
+            m_ServerManager = new Depositary_ServerManager();
+
+        return m_ServerManager;
+    }
+
+    static void CleanInstance()
+    {
+        m_ServerManager = null;
+    }
+}

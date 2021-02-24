@@ -1,0 +1,20 @@
+ImageSetClass {
+ Name "LayoutFrame"
+ RefSize 3840 2160
+ Textures {
+  ImageSetTextureClass {
+   mpix 1
+   path "{F7097C649C332A73}Depositary_System/gui/Images/Overlay.paa"
+  }
+ }
+ Images {
+  ImageSetDefClass LayoutFrame {
+   Name "LayoutFrame"
+   Pos 769 366
+   Size 2190 1314
+   Flags 0
+  }
+ }
+ Groups {
+ }
+}

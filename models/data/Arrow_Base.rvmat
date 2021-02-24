@@ -1,0 +1,94 @@
+////////////////////////////////////////////////////////////////////
+//DeRap: Depositary_System\models\data\Arrow_Base.rvmat
+//Produced from mikero's Dos Tools Dll version 7.64
+//https://mikero.bytex.digital/Downloads
+//'now' is Wed Feb 24 16:31:58 2021 : 'file' last modified on Tue Jan 19 14:07:31 2021
+////////////////////////////////////////////////////////////////////
+
+#define _ARMA_
+
+ambient[] = {1,1,1,0.13};
+diffuse[] = {1,1,1,1};
+forcedDiffuse[] = {0,0,0,0};
+emmisive[] = {1,1,0.1};
+specular[] = {1,1,1,1};
+specularPower = 100;
+PixelShaderID = "Super";
+VertexShaderID = "Super";
+class Stage1
+{
+	texture = "#(argb,8,8,3)color(0.3,0.3,1,1,NOHQ)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {2,0,0};
+		up[] = {0,2,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage2
+{
+	texture = "#(argb,8,8,3)color(0.5,0.5,0.5,1,DT)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {1,0,0};
+		up[] = {0,1,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage3
+{
+	texture = "#(argb,8,8,3)color(0.5,0.5,0.5,0,MC)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {1,0,0};
+		up[] = {0,1,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage4
+{
+	texture = "#(argb,8,8,3)color(1,1,1,1,AS)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {1,0,0};
+		up[] = {0,1,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage5
+{
+	texture = "#(argb,8,8,3)color(0.5,0.5,1,1,SMDI)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {2,0,0};
+		up[] = {0,2,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage6
+{
+	texture = "#(ai,32,128,1)fresnel(0.92,0.08)";
+	uvSource = "tex";
+	class uvTransform
+	{
+		aside[] = {1,0,0};
+		up[] = {0,1,0};
+		dir[] = {0,0,1};
+		pos[] = {0,0,0};
+	};
+};
+class Stage7
+{
+	texture = "dz\data\data\env_co.paa";
+	uvSource = "none";
+};
