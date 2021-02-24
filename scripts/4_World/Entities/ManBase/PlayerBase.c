@@ -11,19 +11,11 @@ modded class PlayerBase
         RegisterNetSyncVariableBool("m_Depositary_IsGarageNPC");
         RegisterNetSyncVariableInt("m_GarageID");
     }
-#ifdef DAYZ_1_09
-    override void SetActions()
-	{
-		super.SetActions();
 
-        AddAction(ActionOpenGarageMenu);
-	}
-#else
     override void SetActions(out TInputActionMap InputActionMap)
 	{
         super.SetActions(InputActionMap);
 
-         AddAction(ActionOpenGarageMenu, InputActionMap);
+        AddAction(ActionOpenGarageMenu, InputActionMap);
     }
-#endif
-}
+};

@@ -6,6 +6,8 @@ class VehicleData
     float EngineHealth;
     float FuelAmmount;
     string VehiclesName;
+    vector SpawnPos;
+    vector SpawnOri;
     ref array<ref VehicleCargo> m_Cargo;
 	
     void VehicleData(string VHName, int indexid, int VHHash, int garageID, /*ref TStringArray cargo*/ ref array<ref VehicleCargo> this_cargo, float engine_health, float fuel_ammount)
@@ -18,6 +20,12 @@ class VehicleData
         EngineHealth = engine_health;
         FuelAmmount = fuel_ammount;
         //CargoItems = cargo;
+    }
+
+    void SetSpawnData(vector pos, vector ori)
+    {
+        SpawnPos = pos;
+        SpawnOri = ori;
     }
 };
 //FOR ITEMS IN VEHICLE CARGO.
@@ -79,6 +87,7 @@ class DepositaryData
 		
 		JsonFileLoader<DepositaryData>.JsonSaveFile(m_ProfileDIR + m_PlayerDataDIR + "/" + playerData.GetID() + ".json", playerData);
 	}
+
     string GetID()
 	{
 		return m_SteamID;
@@ -104,6 +113,7 @@ class DepositaryData
             vehicleData[i].indexID = i;
         }
     }
+    
     int GetNextVehicleIndex()
     {
         if(vehicleData.Count() == 0)
@@ -111,20 +121,30 @@ class DepositaryData
         SortVehicleIDs();
         return vehicleData.Count();
     }
+
     void SetID(string id)
 	{
 		m_SteamID = id;
 	}
+
 	void SetUsername(string playerUsername)
 	{
 		m_PlayerName = playerUsername;
 	}
+
     void InsertNewVehicle(string VHName, int indexid, int VHHash, int GID,/*ref TStringArray cargo*/ ref array<ref VehicleCargo> this_cargo, float EngineHealth, float tank_fuelAmmount)
     {
 		//string VHName, int indexid, int VHHash, ref TStringArray cargo, int VHKeyHash
         vehicleData.Insert(new ref VehicleData(VHName, indexid, VHHash, GID, this_cargo, EngineHealth, tank_fuelAmmount));
         
     }
+
+    void SetSpawnData(int index, vector pos, vector ori)
+    {
+        vehicleData.Get(index).SetSpawnData(pos, ori);
+        SavePlayerData(this);
+    }
+
 	int AmountOfParkedVehicles()
 	{
 		int parkedvehicles = 0;

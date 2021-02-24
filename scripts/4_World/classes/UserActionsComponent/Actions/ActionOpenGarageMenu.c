@@ -21,7 +21,8 @@ class ActionOpenGarageMenu: ActionInteractBase
 	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item )
 	{
         if (GetGame().IsServer())
-            return true;
+            	return true;
+			
 		bool isGarageObject = false;
 		if(Depositary_ClientManager.m_DUMMYS)
 		{
@@ -33,8 +34,12 @@ class ActionOpenGarageMenu: ActionInteractBase
 				}
 			}
 		}
+
 		if(!target || !target.GetObject() || !player || !hasServerConfig)
-			return false;		
+			return false;
+		
+		if(target.GetObject().IsKindOf("GRMODPMACHINE"))
+			return true;
 
 		PlayerBase ntarget = PlayerBase.Cast(target.GetObject());
 		bool isGarageNPCCharacter = false;
@@ -54,6 +59,7 @@ class ActionOpenGarageMenu: ActionInteractBase
 	
     void handleOpenGarageMenuOpenRequest(ActionData action_data)
 	{
+		#ifndef NO_GUI
 		PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
 		if(hasServerConfig)
 		{
@@ -61,16 +67,26 @@ class ActionOpenGarageMenu: ActionInteractBase
 			if ( g_Game.GetUIManager().GetMenu() == NULL )
 			{	
 				PlayerBase man;
+				int GarageID;
 	            if (Class.CastTo(man, action_data.m_Target.GetObject()))
 			    {
 					GetGame().GetUIManager().CloseAll();
-					int GarageID = man.m_GarageID;
+					GarageID = man.m_GarageID;
 					player.m_DepositaryMenu = new DepositaryMenu(GarageID);
 			    	player.m_DepositaryMenu.Init();
 					GetGame().GetUIManager().ShowScriptedMenu( player.m_DepositaryMenu, NULL );
 				}
 				else
 				{
+					if(action_data.m_Target.GetObject().IsKindOf("GRMODPMACHINE"))
+					{
+							GarageID = 6876578756;
+							player.m_DepositaryMenu = new DepositaryMenu(GarageID);
+			    			player.m_DepositaryMenu.Init();
+							GetGame().GetUIManager().ShowScriptedMenu( player.m_DepositaryMenu, NULL );
+							return;
+					}
+
 					for(int i = 0; i < Depositary_ClientManager.m_DUMMYS.Count(); i++)
 					{
 						if(action_data.m_Target.GetObject().GetPosition() == Depositary_ClientManager.m_DUMMYS[i].GaragesPos)
@@ -82,12 +98,13 @@ class ActionOpenGarageMenu: ActionInteractBase
 							GetGame().GetUIManager().ShowScriptedMenu( player.m_DepositaryMenu, NULL );
 						}
 					}
-				}			
+				}	
 			}
 		}
 		else
 		{
 			player.MessageStatus("[GarageSystem] Server Config not loadet! Please wait for Response!");
 		}
+		#endif
 	}
 };

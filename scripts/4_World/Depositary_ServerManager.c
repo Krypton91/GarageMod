@@ -149,9 +149,34 @@ class Depositary_ServerManager
 							int garageID = params.param1;
                             if(garageID == -1)
                                 return;
-                            vector vehicle_Spawn = GetVehicleSpawnPosByGarageID(garageID);
-                            vector vehicle_ori = GetVehiclesSpawnOriByGarageID(garageID);
-                            string vehiclesSpawnState = isVehicleSpawnFree(vehicle_Spawn, vehicle_ori);
+							vector vehicle_Spawn;
+							vector vehicle_ori;
+							string vehiclesSpawnState;
+							if(garageID == 6876578756)
+							{
+								if(!vehicleData[i].SpawnPos || !vehicleData[i].SpawnOri)
+								{
+									GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","This Vehicle can not parked out here!", 1), true, sender);
+									return;
+								}
+								vehicle_Spawn = vehicleData[i].SpawnPos;
+								vehicle_ori = vehicleData[i].SpawnOri;
+								float distance = vector.Distance(vehicle_Spawn, player.GetPosition());
+								if(distance && distance >= 10)
+								{
+									GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","This Vehicle can not parked out here!", 1), true, sender);
+									return;
+								}
+								vehiclesSpawnState = "FREE";
+
+							}
+							else
+							{
+								vehicle_Spawn = GetVehicleSpawnPosByGarageID(garageID);
+								vehicle_ori = GetVehiclesSpawnOriByGarageID(garageID);
+								vehiclesSpawnState = isVehicleSpawnFree(vehicle_Spawn, vehicle_ori);
+							}
+
 							if(!m_Settings.IsGarageGlobal && garageID != vehicleData[i].GarageID && vehicleData[i].GarageID != -1)
 							{
 								GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("ERROR","This Vehicle cant parked out here!", 1), true, sender);
@@ -451,7 +476,15 @@ class Depositary_ServerManager
 
 				if(playerData.AmountOfParkedVehicles() + 1 <= m_Settings.MaxVehiclesToStore || isSenderAdmin(sender.GetPlainId()))
 				{
-	                Object car = GetVehicleParkPosWithGarageID(params.param1);
+					Object car;
+					if(params.param1 == 6876578756)
+					{
+						car = GetVehicleParkPosWithCords(player.GetPosition(), player.GetOrientation());
+					}
+					else
+					{
+	                	car = GetVehicleParkPosWithGarageID(params.param1);
+					}
 	                if(car)
 	                {
 						if(isVehicleBlackListet(car.GetType()))
@@ -622,6 +655,11 @@ class Depositary_ServerManager
 					//Insert with GarageID -1 = Global
 					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
 				}
+				if(GarageID == 6876578756)
+				{
+					SetVehicleSpawnData(playerData, insertIndex, vehicle.GetPosition(), vehicle.GetOrientation());//Safe on this garage spawn pos & yaw!
+				}
+
 	            GetGame().ObjectDelete(car);
 	    }
 	}
@@ -670,6 +708,11 @@ class Depositary_ServerManager
         playerData.InsertNewVehicle(VehicleName, index, VehicleHash, GaragenID, this_cargo, EngineHealth, tank_fuelAmmount);
         playerData.SavePlayerData(playerData, AccountName);
     }
+
+	void SetVehicleSpawnData(DepositaryData playerdata, int index, vector spawnPos, vector spawnOri)
+	{
+		playerdata.SetSpawnData(index, spawnPos, spawnOri);
+	}
 
 	void GarageDataRequest(CallType type, ref ParamsReadContext ctx, ref PlayerIdentity sender, ref Object target)
     {
@@ -1295,6 +1338,42 @@ class Depositary_ServerManager
 		array<Object> excluded_objects = new array<Object>;
 		array<Object> nearby_objects = new array<Object>;
 		if (GetGame().IsBoxColliding(GetVehicleSpawnPosByGarageID(garageID), GetVehicleSpawnOriByGarageID(garageID), size, excluded_objects, nearby_objects))
+		{
+			for (int i = 0; i < nearby_objects.Count(); i++)
+			{
+					bool vehicleIsEmpty = true;
+
+					Transport transport;
+					Class.CastTo(transport, nearby_objects.Get(i));
+					if (transport)
+					{
+						int crewSize = transport.CrewSize();
+						for (int c = 0; c < crewSize; c++)
+						{
+							if (transport.CrewMember(c))
+								vehicleIsEmpty = false;
+						}
+					}
+					else
+					{
+						continue;
+					}
+
+					if (!vehicleIsEmpty)
+						continue;
+
+					return nearby_objects.Get(i);						
+			}
+		}
+		return NULL;
+	}
+
+	Object GetVehicleParkPosWithCords(vector Position, vector Orientation)
+	{
+		vector size = "3 5 9";
+		array<Object> excluded_objects = new array<Object>;
+		array<Object> nearby_objects = new array<Object>;
+		if (GetGame().IsBoxColliding(Position, Orientation, size, excluded_objects, nearby_objects))
 		{
 			for (int i = 0; i < nearby_objects.Count(); i++)
 			{
