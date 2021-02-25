@@ -135,7 +135,7 @@ class Depositary_ServerManager
 
                 if(!CanPayCosts(player, m_Settings.CostsToParkOutVehicle))
                 {
-                    GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","You dont have enought money in your Inventory!" + m_Settings.CostsToParkOutVehicle, 1), true, sender);
+                    GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","You dont have enought money in your Inventory! " + m_Settings.CostsToParkOutVehicle, 1), true, sender);
                     return;
                 }
                 else
@@ -248,7 +248,6 @@ class Depositary_ServerManager
 					}
 				}
 
-			    //Todo
 				if(foundVehicle)
 				{
 					if(CanPayCosts(player, m_Settings.CostsToBuyVehicleKey))
@@ -575,7 +574,23 @@ class Depositary_ServerManager
 			}
 			if(m_Settings.IsLoggingActiv)
 				GetGarageLogger().LogLine(sender.GetName(), sender.GetPlainId(), player.GetPosition(), "Parked in : " + vehicle.GetType() + " " + Cargo.Count() + " items stored to DB!");
-	        InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());    
+	        //InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+			if(!m_Settings.IsGarageGlobal)
+			{
+				//Safe The GarageID to File
+				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+			}
+			else
+			{
+				//Insert with GarageID -1 = Global
+				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+			}
+
+			if(GarageID == 6876578756)
+			{
+				SetVehicleSpawnData(playerData, insertIndex, vehicle.GetPosition(), vehicle.GetOrientation());//Safe on this garage spawn pos & yaw!
+			} 
+
 	        GetGame().ObjectDelete(car);
 	    }
 	}
@@ -677,20 +692,20 @@ class Depositary_ServerManager
 
 	bool CanPayCosts(PlayerBase player, int CostsToCheck)
 	{
-		if(CostsToCheck >= GetCurrencyAmountOnPlayer(player))
+		if(CostsToCheck > GetCurrencyAmountOnPlayer(player))
 		{
-			#ifdef ADVANCEDBANKING
+			#ifdef ADVANCED_BANKING
 			KR_JsonDatabaseHandler playerdata = KR_JsonDatabaseHandler.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
 				if(playerdata.GetBankCredit() >= CostsToCheck && m_Settings.CanPayWithBankAccount)
 					return true;
 			}
-			#endif
-			#ifdef DC_BANKING
+			#else
 			DC_BankingData playerdata = DC_BankingData.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
+				Print("DC BANKING MODULE WAS LOADET: " + playerdata.GetOwnedCurrency().ToString() + " needed costs: " + CostsToCheck.ToString());
 				if(playerdata.GetOwnedCurrency() >= CostsToCheck && m_Settings.CanPayWithBankAccount)
 					return true;
 			}
@@ -915,7 +930,7 @@ class Depositary_ServerManager
 		else
 		{
 			//Pay with bank!
-			#ifdef ADVANCEDBANKING
+			#ifdef ADVANCED_BANKING
 			KR_JsonDatabaseHandler playerdata = KR_JsonDatabaseHandler.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
@@ -923,8 +938,7 @@ class Depositary_ServerManager
 				return true;
 			}
 			return false;
-			#endif
-			#ifdef DC_BANKING
+			#else
 			DC_BankingData playerdata = DC_BankingData.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
@@ -933,7 +947,7 @@ class Depositary_ServerManager
 				playerdata.SavePlayerData(playerdata);
 			}
 			return false;
-			#else
+			#endif
 		}
 		return false;
 	}
