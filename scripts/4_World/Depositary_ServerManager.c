@@ -939,6 +939,7 @@ class Depositary_ServerManager
 				return true;
 			}
 			return false;
+			#endif
 			#ifdef DC_BANKING
 			DC_BankingData playerdata = DC_BankingData.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
