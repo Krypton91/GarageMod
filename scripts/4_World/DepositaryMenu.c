@@ -470,39 +470,6 @@ class DepositaryMenu extends UIScriptedMenu
 			}
 			handleParkOutRequest(row_index, true);
 		}
-		if(m_ActionID == 3)
-		{
-			//TODO Check again currency on Player ask him for banking.
-			if(NeedPayWithBankAccount(1) && !m_isPayWithBankinActiv && Depositary_ClientManager.CanPayWithBankAccount)
-			{
-				m_ActionID = 2;
-				handleYesNoAction();
-			}
-			else
-			{
-				HideYesNoMessage();
-				handleParkInRequest();
-			}
-		}
-	}
-
-	protected bool NeedPayWithBankAccount(int action)
-	{
-		if(action == 1)
-		{
-			if(getPlayerCurrencyAmount() < Depositary_ClientManager.CostsToParkInVehicle)
-			{
-				return true;
-			}
-		}
-		else
-		{
-			if(getPlayerCurrencyAmount() < Depositary_ClientManager.CostsToParkOutVehicle)
-			{
-				return true;
-			}
-		}
-		return false;
 	}
 
     protected void UpdateUI()
@@ -547,12 +514,6 @@ class DepositaryMenu extends UIScriptedMenu
 	{
 		switch(m_ActionID)
 		{
-			case 1:
-				BuildYesNoMessage("#garage_UI_Message_ParkingOutWithBank", "#garage_UI_Message_NotEnoughCashOnPlayer"); 
-				break;
-			case 2:
-				BuildYesNoMessage("#garage_UI_Message_ParkingInWithBank", "#garage_UI_Message_NotEnoughCashOnPlayer"); 
-				break;
 			case 3:
 				BuildYesNoMessage("#garage_UI_Message_NoInventory", "#garage_UI_Message_WarningInvWipe");
 				break;
