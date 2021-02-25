@@ -461,6 +461,11 @@ class DepositaryMenu extends UIScriptedMenu
 			handleParkInRequest(true);
 			HideYesNoMessage();
 		}
+		if(m_ActionID == 3)
+		{
+			handleParkInRequest(true);
+			HideYesNoMessage();
+		}
 		if(m_ActionID == 1)
 		{
 			if(m_CarList.GetSelectedRow() == -1)
@@ -516,7 +521,7 @@ class DepositaryMenu extends UIScriptedMenu
 		{
 			case 3:
 				BuildYesNoMessage("#garage_UI_Message_NoInventory", "#garage_UI_Message_WarningInvWipe");
-				break;
+			break;
 		}
 	}
 

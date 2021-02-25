@@ -701,7 +701,8 @@ class Depositary_ServerManager
 				if(playerdata.GetBankCredit() >= CostsToCheck && m_Settings.CanPayWithBankAccount)
 					return true;
 			}
-			#else
+			#endif
+			#ifdef DC_BANKING
 			DC_BankingData playerdata = DC_BankingData.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
@@ -938,7 +939,7 @@ class Depositary_ServerManager
 				return true;
 			}
 			return false;
-			#else
+			#ifdef DC_BANKING
 			DC_BankingData playerdata = DC_BankingData.LoadPlayerData(player.GetIdentity().GetPlainId(), player.GetIdentity().GetName());
 			if(playerdata)
 			{
