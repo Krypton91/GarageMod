@@ -322,8 +322,9 @@ class Depositary_ServerManager
 	}
 
 #ifdef MuchCarKey
-	void ParkOutWithMuchCarKey(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData)
-	{
+	
+	void ParkOutWithMuchCarKey_NEW01(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData) {
+
 		MCK_CarKey_Base vehicleKey;
 
 		ref VehicleCargo vehicleCargoPiece;
@@ -365,7 +366,7 @@ class Depositary_ServerManager
 			// Item could neither be created as attachment nor in cargo. The only reason I can think of is
 			// when the vehicle cargo size or a container cargo size has been changed after parking the vehicle in.
 			//
-			if(!childItem)
+			if (!childItem)
 			{
 				childItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleCargoPiece.ItemName, player.GetPosition()));
 				Param1<string> message = new Param1<string>("Vehicle inventory was full. The rest of the items was spawned on the ground.");
@@ -378,8 +379,48 @@ class Depositary_ServerManager
 			SetItemAmount(childItem, vehicleCargoPiece.VehicleCargoAmmount);
 			items.Insert(vehicleCargoPiece.GetOldID(), childItem);
 		}
-        
-        Car car;
+	}
+
+	void ParkOutWithMuchCarKey(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData)
+	{
+		if(DepositaryData.m_FormatVersion == DepositaryDataFormatVersion.NEW01)
+		{
+			ParkOutWithMuchCarKey_NEW01(vehicle, vehicleData, i, player, playerData);
+		}
+		else
+		{
+			MCK_CarKey_Base vehicleKey;
+			for (int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
+			{
+				if (!canCreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount))
+				{
+					ItemBase playersInvItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleData[i].m_Cargo[n].ItemName, player.GetPosition()));
+					if (vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
+						playersInvItem.SetHealth(vehicleData[i].m_Cargo[n].Health);
+					Param1<string> msgRp0 = new Param1<string>("Vehicle Inventory was full rest of items spawned on ground!!");
+					GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, msgRp0, true, player.GetIdentity());
+				}
+				else
+				{
+					ItemBase item = ItemBase.Cast(CreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount, player));
+					if (vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
+						item.SetHealth(vehicleData[i].m_Cargo[n].Health);
+					if (Class.CastTo(vehicleKey, item))
+					{
+						//WE NO KNOW ITS AN KEY FROM HELKIANA.
+						local int KeysHashCode = 0;
+						KeysHashCode = vehicleData[i].m_Cargo[n].KeyHash;
+						if (KeysHashCode != 0)
+						{
+							//Database has the entry
+							vehicleKey.SetNewMCKId(KeysHashCode);
+						}
+					}
+				}
+			}
+		}
+
+		Car car;
         Class.CastTo(car, vehicle);
         if (car)
         {
@@ -583,7 +624,7 @@ class Depositary_ServerManager
 				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","#garage_UI_Message_WasNotLastDriver", 1), true, sender);
 				return;
 			}
-
+			
 			//Todo add here money to deduct currency.
 			RemoveCurrencyFromPlayer(player, m_Settings.CostsToParkInVehicle);
 	        vehicle.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER,items);
@@ -675,7 +716,7 @@ class Depositary_ServerManager
 				SetVehicleSpawnData(playerData, insertIndex, vehicle.GetPosition(), vehicle.GetOrientation());//Safe on this garage spawn pos & yaw!
 			} 
 
-	        // GetGame().ObjectDelete(car);
+	        GetGame().ObjectDelete(car);
 	    }
 	}
 #else

@@ -135,13 +135,24 @@ class VehicleCargo
         return m_AttachmentSlotName;
     }
 }
+
+enum DepositaryDataFormatVersion
+{
+    LEGACY,
+    NEW01
+}
+
 class DepositaryData
 {
     const protected static string m_ProfileDIR = "$profile:";
     const protected static string m_PlayerDataDIR = "Depositary_System/PlayerData";
+ 
     protected string m_SteamID;
     protected string m_PlayerName;
+    
     ref array< ref VehicleData > vehicleData;
+
+    static int m_FormatVersion;
 
     void DepositaryData(string plainID = "", string username = "")
     {
@@ -159,6 +170,7 @@ class DepositaryData
 		
 		return playerData;
 	}
+
     static void SavePlayerData(DepositaryData playerData, string username = "")
 	{
 		if(!playerData)
@@ -176,16 +188,16 @@ class DepositaryData
 			playerData.SetUsername(username);
 		}
 		
-		JsonFileLoader<DepositaryData>.JsonSaveFile(m_ProfileDIR + m_PlayerDataDIR + "/" + playerData.GetID() + ".json", playerData);
+		// JsonFileLoader<DepositaryData>.JsonSaveFile(m_ProfileDIR + m_PlayerDataDIR + "/" + playerData.GetID() + ".json", playerData);
 
-        /*
         autoptr FileSerializer file = new FileSerializer();
         if (file.Open(m_ProfileDIR + m_PlayerDataDIR + "/" + playerData.GetID() + ".serialized", FileMode.WRITE))
         {
             file.Write(playerData);
             file.Close();
+
+            // @TODO delete json version
         }
-        */
     }
 
     string GetID()
@@ -265,19 +277,33 @@ class DepositaryData
         if(!FileExist(m_ProfileDIR + m_PlayerDataDIR + "/"))
             MakeDirectory(m_ProfileDIR + m_PlayerDataDIR + "/");
         
-        if(FileExist(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".json"))
+        if(FileExist(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".serialized"))
         {
-            JsonFileLoader<DepositaryData>.JsonLoadFile(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".json", playerData);
-            //User Changed name, no problem on file Load it will change to aktuell name.
-            if(username != "")
+            m_FormatVersion = DepositaryDataFormatVersion.NEW01;
+
+            FileSerializer file = new FileSerializer();
+
+            if (file.Open(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".serialized", FileMode.READ))
             {
-                playerData.SetUsername(username);
+                file.Read(playerData);
+                file.Close();
             }
+        }
+        else if(FileExist(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".json"))
+        {
+            m_FormatVersion = DepositaryDataFormatVersion.LEGACY;
+            JsonFileLoader<DepositaryData>.JsonLoadFile(m_ProfileDIR + m_PlayerDataDIR + "/" + PlainID + ".json", playerData);
         }
         else
         {
             playerData = CreateDefaultPlayerData(PlainID, username);
         }
+
+        if (username != "")
+        {
+            playerData.SetUsername(username);
+        }
+
         return playerData;
     }
 };
