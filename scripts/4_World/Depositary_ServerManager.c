@@ -20,6 +20,36 @@ class Depositary_ServerManager
 		GetGame().GetCallQueue(CALL_CATEGORY_GUI).Remove(this.SetIsParkinDisabled);
     }
 
+	EntityAI GetParentInventoryItem(EntityAI item)
+	{
+		if (!item)
+			return NULL;
+
+		InventoryLocation inventoryLocation = new InventoryLocation;
+		item.GetInventory().GetCurrentInventoryLocation(inventoryLocation);
+		return inventoryLocation.GetParent();
+	}
+
+	ItemCargoCoordinates GetItemCargoCoordinates(EntityAI item)
+	{
+		int row = -1;
+		int col = -1;
+
+		CargoBase parentCargo = GetParentInventoryItem(item).GetInventory().GetCargo();
+
+		if(parentCargo)
+		{
+			int index = parentCargo.FindEntityInCargo(item);
+		}
+		else
+		{
+			return new ItemCargoCoordinates(row, col, false);
+		}
+		
+		parentCargo.GetItemRowCol(index, row, col);
+		return new ItemCargoCoordinates(row, col, item.GetInventory().GetFlipCargo());
+	}
+
 	void InitGarageServerside()
 	{
 		m_Settings  = Depositary_Config.Load();
@@ -292,38 +322,105 @@ class Depositary_ServerManager
 	}
 
 #ifdef MuchCarKey
-	void ParkOutWithMuchCarKey(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData)
-	{
+	
+	void ParkOutWithMuchCarKey_NEW01(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData) {
+
 		MCK_CarKey_Base vehicleKey;
-        for(int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
-        {
-			if(!canCreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount))
+
+		ref VehicleCargo vehicleCargoPiece;
+		int slotID;
+
+		map<int, EntityAI> items = new map<int, EntityAI>();
+		EntityAI parentItem;
+		EntityAI childItem;
+		Barrel_ColorBase barrel;
+
+		for (int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
+		{
+			vehicleCargoPiece = vehicleData[i].m_Cargo[n];
+			parentItem = items.Get(vehicleCargoPiece.GetOldParentID());
+
+			if (!parentItem)
+				parentItem = vehicle;
+
+			if (vehicleCargoPiece.IsAttachment())
 			{
-				ItemBase playersInvItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleData[i].m_Cargo[n].ItemName, player.GetPosition()));
-				if(vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
-					playersInvItem.SetHealth(vehicleData[i].m_Cargo[n].Health);
-				Param1<string> msgRp0 = new Param1<string>( "Vehicle Inventory was full rest of items spawned on ground!!" );
-				GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, msgRp0, true, player.GetIdentity());
+				slotID = InventorySlots.GetSlotIdFromString(vehicleCargoPiece.GetAttachmentSlotName());
+				childItem = parentItem.GetInventory().CreateAttachmentEx(vehicleCargoPiece.ItemName, slotID);
+
+				if (Class.CastTo(barrel, childItem))
+					barrel.Open();
 			}
 			else
 			{
-				ItemBase item = ItemBase.Cast(CreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount, player));
-				if(vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
-					item.SetHealth(vehicleData[i].m_Cargo[n].Health );
-				if(Class.CastTo(vehicleKey, item))
+				slotID = parentItem.GetInventory().GetCargo().GetOwnerCargoIndex();
+				childItem = parentItem.GetInventory().CreateEntityInCargoEx(vehicleCargoPiece.ItemName, slotID, vehicleCargoPiece.GetItemCargoCoordinateRow(), vehicleCargoPiece.GetItemCargoCoordinateCol(), vehicleCargoPiece.IsFlipped());
+
+				if (Class.CastTo(vehicleKey, childItem))
 				{
-					//WE NO KNOW ITS AN KEY FROM HELKIANA.
-					local int KeysHashCode = 0;
-					KeysHashCode = vehicleData[i].m_Cargo[n].KeyHash;
-					if(KeysHashCode != 0)
-					{
-						//Database has the entry 
-						vehicleKey.SetNewMCKId(KeysHashCode);
-					}				
+					vehicleKey.SetNewMCKId(vehicleCargoPiece.KeyHash);
 				}
-			}							
-        }
-        Car car;
+			}
+
+			//
+			// Item could neither be created as attachment nor in cargo. The only reason I can think of is
+			// when the vehicle cargo size or a container cargo size has been changed after parking the vehicle in.
+			//
+			if (!childItem)
+			{
+				childItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleCargoPiece.ItemName, player.GetPosition()));
+				Param1<string> message = new Param1<string>("Vehicle inventory was full. The rest of the items was spawned on the ground.");
+				GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, message, true, player.GetIdentity());
+			}
+
+			if (vehicleCargoPiece.Health && m_Settings.SaveDamage)
+				childItem.SetHealth(vehicleCargoPiece.Health);
+
+			SetItemAmount(childItem, vehicleCargoPiece.VehicleCargoAmmount);
+			items.Insert(vehicleCargoPiece.GetOldID(), childItem);
+		}
+	}
+
+	void ParkOutWithMuchCarKey(EntityAI vehicle, ref array<ref VehicleData> vehicleData, int i, PlayerBase player, DepositaryData playerData)
+	{
+		if(DepositaryData.m_FormatVersion == DepositaryDataFormatVersion.NEW01)
+		{
+			ParkOutWithMuchCarKey_NEW01(vehicle, vehicleData, i, player, playerData);
+		}
+		else
+		{
+			MCK_CarKey_Base vehicleKey;
+			for (int n = 0; n < vehicleData[i].m_Cargo.Count(); n++)
+			{
+				if (!canCreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount))
+				{
+					ItemBase playersInvItem = ItemBase.Cast(player.SpawnEntityOnGroundPos(vehicleData[i].m_Cargo[n].ItemName, player.GetPosition()));
+					if (vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
+						playersInvItem.SetHealth(vehicleData[i].m_Cargo[n].Health);
+					Param1<string> msgRp0 = new Param1<string>("Vehicle Inventory was full rest of items spawned on ground!!");
+					GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, msgRp0, true, player.GetIdentity());
+				}
+				else
+				{
+					ItemBase item = ItemBase.Cast(CreateItemInVehicleInventory(vehicle, vehicleData[i].m_Cargo[n].ItemName, vehicleData[i].m_Cargo[n].VehicleCargoAmmount, player));
+					if (vehicleData[i].m_Cargo[n].Health && m_Settings.SaveDamage)
+						item.SetHealth(vehicleData[i].m_Cargo[n].Health);
+					if (Class.CastTo(vehicleKey, item))
+					{
+						//WE NO KNOW ITS AN KEY FROM HELKIANA.
+						local int KeysHashCode = 0;
+						KeysHashCode = vehicleData[i].m_Cargo[n].KeyHash;
+						if (KeysHashCode != 0)
+						{
+							//Database has the entry
+							vehicleKey.SetNewMCKId(KeysHashCode);
+						}
+					}
+				}
+			}
+		}
+
+		Car car;
         Class.CastTo(car, vehicle);
         if (car)
         {
@@ -366,6 +463,7 @@ class Depositary_ServerManager
         playerData.vehicleData.Remove(i);
         playerData.SortVehicleIDs();
         playerData.SavePlayerData(playerData, player.GetIdentity().GetName());
+
 		if(m_Settings.IsLoggingActiv)
 			GetGarageLogger().LogLine(player.GetIdentity().GetName(), player.GetIdentity().GetPlainId(), player.GetPosition(), "Parked out :" + vehicle.GetType());
 		
@@ -519,12 +617,14 @@ class Depositary_ServerManager
 	    if( Class.CastTo(vehicle, car))
 	    {
 			CarScript carScript = CarScript.Cast(vehicle);
+			
 			if(carScript && carScript.m_Trader_LastDriverId != sender.GetId() || carScript.m_Trader_LastDriverId == string.Empty)
 			{
 				//WAS NOT LAST DRIVER!!
 				GetRPCManager().SendRPC("Depositary_System", "UI_MessageRequest", new Param3<string, string, int>("#garage_UI_Message_ERROR","#garage_UI_Message_WasNotLastDriver", 1), true, sender);
 				return;
 			}
+			
 			//Todo add here money to deduct currency.
 			RemoveCurrencyFromPlayer(player, m_Settings.CostsToParkInVehicle);
 	        vehicle.GetInventory().EnumerateInventory(InventoryTraversalType.PREORDER,items);
@@ -550,7 +650,10 @@ class Depositary_ServerManager
 			}
 			else
 			{
-		        for(int i = 0; i < items.Count(); i++)
+				int attachmentSlotID;
+				string attachmentSlotName;
+
+				for(int i = 0; i < items.Count(); i++)
 		        {
 					ItemBase item = ItemBase.Cast(items[i]);
 					if(!item)
@@ -559,31 +662,53 @@ class Depositary_ServerManager
 						continue;
 					if(item.IsRuined())
 						continue;
+
 					MCK_CarKey_Base key;
-					if(Class.CastTo(key, item) && m_Settings.KeepInventory == true)
+					VehicleCargo vehicleCargo;
+
+					if (m_Settings.KeepInventory == true)
 					{
-						Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth(), key.GetMCKId()));
-					}
-					else
-					{
-						//Insert with Hash 0!!!
-						if(m_Settings.KeepInventory == true)
-							Cargo.Insert(new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth()));
+						if(Class.CastTo(key, item))
+						{
+							vehicleCargo = new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth(), key.GetMCKId());
+						}
+						else
+						{
+							vehicleCargo = new VehicleCargo(item.GetType(), GetItemAmount(item), item.GetHealth());
+						}
+						
+						vehicleCargo.SetOldID(item.GetID());
+						vehicleCargo.SetOldParentID(GetParentInventoryItem(item).GetID());
+						vehicleCargo.SetItemCargoCoordinateRow(GetItemCargoCoordinates(item).GetRow());
+						vehicleCargo.SetItemCargoCoordinateCol(GetItemCargoCoordinates(item).GetCol());
+						vehicleCargo.SetFlipped(GetItemCargoCoordinates(item).IsFlipped());
+
+						if(item.GetInventory().IsAttachment())
+						{
+							item.GetInventory().GetCurrentAttachmentSlotInfo(attachmentSlotID, attachmentSlotName)
+							vehicleCargo.SetAttachmentSlotID(attachmentSlotID);
+							vehicleCargo.SetAttachmentSlotName(attachmentSlotName);
+						}
+
+						vehicleCargo.SetAttachment(item.GetInventory().IsAttachment());
+
+						Cargo.Insert(vehicleCargo);
 					}
 		        }
 			}
+
 			if(m_Settings.IsLoggingActiv)
 				GetGarageLogger().LogLine(sender.GetName(), sender.GetPlainId(), player.GetPosition(), "Parked in : " + vehicle.GetType() + " " + Cargo.Count() + " items stored to DB!");
-	        //InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+
 			if(!m_Settings.IsGarageGlobal)
 			{
 				//Safe The GarageID to File
-				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount(), vehicle.GetID());
 			}
 			else
 			{
 				//Insert with GarageID -1 = Global
-				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+				InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount(), vehicle.GetID());
 			}
 
 			if(GarageID == 6876578756)
@@ -719,9 +844,9 @@ class Depositary_ServerManager
 		return false;
 	}
 
-    protected void InsertNewVehicle(int index, string VehicleName, int VehicleHash, int GaragenID, /*ref TStringArray cargo*/ref array<ref VehicleCargo> this_cargo, DepositaryData playerData, string AccountName, float EngineHealth, float tank_fuelAmmount)
+    protected void InsertNewVehicle(int index, string VehicleName, int VehicleHash, int GaragenID, /*ref TStringArray cargo*/ref array<ref VehicleCargo> this_cargo, DepositaryData playerData, string AccountName, float EngineHealth, float tank_fuelAmmount, int oldID)
     {
-        playerData.InsertNewVehicle(VehicleName, index, VehicleHash, GaragenID, this_cargo, EngineHealth, tank_fuelAmmount);
+        playerData.InsertNewVehicle(VehicleName, index, VehicleHash, GaragenID, this_cargo, EngineHealth, tank_fuelAmmount, oldID);
         playerData.SavePlayerData(playerData, AccountName);
     }
 
@@ -1476,3 +1601,9 @@ class Depositary_ServerManager
         m_ServerManager = null;
     }
 }
+
+/*
+slotID = InventorySlots.GetSlotIdFromString("Truck_01_Hood");
+InventoryLocation inventoryLocation = new InventoryLocation;
+inventoryLocation.SetAttachment(truck, truckHood, slotID);
+*/
