@@ -4,8 +4,7 @@ modded class MissionGameplay
     override void OnKeyRelease(int key)
 	{
         super.OnKeyRelease(key);
-		
-
+	
 		if ( key == KeyCode.KC_ESCAPE )
 		{
             PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());

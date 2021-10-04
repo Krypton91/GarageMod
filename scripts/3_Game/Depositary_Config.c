@@ -64,6 +64,8 @@ class Depositary_Config
 {
 
     float CooldownForGarage;
+    int GarageMode;
+    bool ParkingMachineLifeTimeIsUnlimited;
     int MaxVehiclesToStore;
     int CostsToParkInVehicle;
     int CostsToParkOutVehicle;
@@ -88,6 +90,7 @@ class Depositary_Config
 
     void LoadDefaultSettings()
     {
+        GarageMode = 1;
         CooldownForGarage = 5;
         MaxVehiclesToStore = 5;
         CostsToParkInVehicle  = 1000;
@@ -155,4 +158,16 @@ class Depositary_Config
         }
         return settings;
     }
+};
+
+/* Global Getter for config */
+static ref Depositary_Config g_Depositary_Config;
+static ref Depositary_Config GetGarageModConfig() 
+{
+
+    if (g_Game.IsServer() && !g_Depositary_Config) 
+    {
+        g_Depositary_Config = Depositary_Config.Load();
+    }
+    return g_Depositary_Config;
 };
