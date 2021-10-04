@@ -12,16 +12,6 @@ class GarageModStaticObjectParkingNew extends Inventory_Base
         }
     }
 
-    int GetGarageNumber()
-    {
-        return hash;
-    }
-
-    void VehicleKeyBase()
-    {
-        RegisterNetSyncVariableInt( "hash", 0, int.MAX - 1);
-    }
-
     override void OnStoreSave( ParamsWriteContext ctx )
 	{   
 		super.OnStoreSave( ctx );
@@ -70,7 +60,7 @@ class GarageModStaticObjectParkingNew extends Inventory_Base
         return hash;
     }
 
-    protected void generateHash()
+    protected void GenerateHash()
     {
         if (hash <= 0)
         {
@@ -87,4 +77,4 @@ class GarageModStaticObjectParkingNew extends Inventory_Base
 			SetSynchDirty();
         }
     }
-}
+};
