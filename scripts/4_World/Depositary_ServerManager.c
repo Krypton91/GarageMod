@@ -788,12 +788,12 @@ class Depositary_ServerManager
 				if(!m_Settings.IsGarageGlobal)
 				{
 					//Safe The GarageID to File
-					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, GarageID, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount(), vehicle.GetID());
 				}
 				else
 				{
 					//Insert with GarageID -1 = Global
-					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount());
+					InsertNewVehicle(insertIndex, vehicle.GetType(), VehicleHash, -1, Cargo, playerData, sender.GetName(), vehicle.GetHealth(), carScript.GarageGetFuelAmmount(), vehicle.GetID());
 				}
 				if(GarageID == 6876578756)
 				{
