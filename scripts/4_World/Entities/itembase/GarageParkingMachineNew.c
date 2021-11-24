@@ -1,3 +1,4 @@
+/*
 class GarageModStaticObjectParkingNew extends Inventory_Base
 {
     protected int hash = 0;
@@ -78,3 +79,4 @@ class GarageModStaticObjectParkingNew extends Inventory_Base
         }
     }
 };
+*/

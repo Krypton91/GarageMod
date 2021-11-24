@@ -245,6 +245,7 @@ class Depositary_ServerManager
 									#else 
 									//TODO: Park out function with no Hash....
 									#endif
+									#endif
 								}
                             }
                             else
@@ -393,7 +394,7 @@ class Depositary_ServerManager
 		else
 		{
 			MCK_CarKey_Base vehicleKey;
-			for (int n = 0; n < vehicleData:Get(i).m_Cargo.Count(); n++)
+			for (int n = 0; n < vehicleData.Get(i).m_Cargo.Count(); n++)
 			{
 				if (!canCreateItemInVehicleInventory(vehicle, vehicleData.Get(i).m_Cargo.Get(n).ItemName, vehicleData.Get(i).m_Cargo.Get(n).VehicleCargoAmmount))
 				{
